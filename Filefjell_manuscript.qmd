@@ -1,0 +1,42 @@
+---
+title: "Filefjell_manuscript"
+format: html
+editor: visual
+---
+
+```{css, echo = FALSE}
+.justify {
+  text-align: justify !important
+}
+```
+
+## Introduction
+
+:::{.justify}
+
+Climate change is affecting ecosystems everywhere, but the effects are more pronounced in areas where climatic conditions entailed a threshold to which species could survive there. This is the case in alpine systems, were the increasing temperatures lead to warmer and longer growing seasons. As a result, native plants can have a greater metabolic rate and grow greater and better, and competition between them increases. This follows the stress hypothesis, which implies that plants growing in harsher environments will have more stress-tolerating traits, while those in milder climates will favour competition-oriented traits.
+
+This is expected to benefit certain species within the native flora, but it also opens up the ecosystem for lowland species that earlier could not survive there. Lowland species can therefore start growing at higher altitudes, competing for resources against the alpine plants. Species with greater competitive abilities are then expected to migrate into the mountains, taking up areas previously occupied by alpine plants, and in some case displacing them, leading to the disappearance of some of these species.
+
+In order to study these changes it is important to have temporal data that show the species composition of mountains tops throughout the years. This has been done in several alpine areas... Write about some examples and the results found there.
+
+Our current study is focused on the Filefjell mountain-system, in Norway. The local community of these tops was first recorded in 1972, and afterwards in 2010. In the 40-year period a great increase in species richness was found at all tops, mainly in those with low richness to begin with. We expect that after 15 more years the increase will be even more noticeable, with a greater influx of lowland species.
+
+Our hypotheses are that 1) species richness has continued to increase and has, in fact, accelerated in the last decade; 2) the less plastic alpine species have started disappearing from the mountain tops; and 3) while alpha-diversity increases, beta-diversity between the mountain tops has decreased, leading to more similar ecosystems.
+
+## Material and methods
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+:::
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this.
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
