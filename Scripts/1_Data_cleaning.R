@@ -5,9 +5,13 @@ library(janitor)
 
 filefjell_1972_2010 <- read_csv2("Raw_data/Filefjell_1972_2010.csv")
 filefjell_2024 <- read_csv2("Raw_data/Filefjell_2024.csv")
+filefjell_summit_data <- read_csv("Raw_data/Summit_data.csv")
 
 
-# We clean and make the 1972 and 2010 data long
+
+# Tidying the data----
+
+# We tidy and make the 1972 and 2010 data long
 
 filefjell_1972_2010_tidy <- filefjell_1972_2010 |> 
   relocate(Year) |> 
@@ -16,11 +20,9 @@ filefjell_1972_2010_tidy <- filefjell_1972_2010 |>
   pivot_longer(cols = -c(Year:Elevation), names_to = "species", values_to = "distance") |> 
   clean_names() |> 
   mutate(species = str_replace_all(species, c(" " = "_", "\\." = ""))) |> 
-  filter(!is.na(distance)) |> 
-  arrange(year, summit, species)
+  filter(!is.na(distance))
 
-
-# We did not get exactly the same altitude for all summits in 2024 as in the previous year (more accurate gps?). We standardize the values by calculating distance from top in 2024
+# We tidy the 2024 data and calculate distance to summit
 
 filefjell_2024_tidy <- filefjell_2024 |> 
   clean_names() |> 
@@ -34,5 +36,88 @@ filefjell_2024_tidy <- filefjell_2024 |>
   select(-altitude) |> 
   relocate(distance, .after = species)
 
-filefjell_2024_metadata <- filefjell_2024_tidy |> 
-  select(date, vaer)
+# We tidy the summit data
+
+filefjell_summit_data_tidy <- filefjell_summit_data |> 
+  clean_names() |> 
+  mutate(summit = str_replace_all(summit, " ", "_"))
+
+
+
+# We correct some errors----
+
+# Summits' elevations
+# There are some differences among years in the summits elevations. We use the values from Norgeskart
+
+
+# Species names
+
+filefjell_tidy_lost <- filefjell_1972_2010_tidy |> 
+  select(species) |> 
+  arrange(species) |> 
+  distinct() |> 
+  anti_join(filefjell_2024_tidy |> 
+              select(species) |> 
+              arrange(species) |> 
+              distinct())
+
+filefjell_tidy_new <- filefjell_2024_tidy |> 
+  select(species) |> 
+  arrange(species) |> 
+  distinct() |> 
+  anti_join(filefjell_1972_2010_tidy |> 
+              select(species) |> 
+              arrange(species) |> 
+              distinct())
+# In 2010 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 as well
+# In 2010 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan
+# In 2010 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri
+# In 2010 Poa x jemtlandica was shortened to Poa x jem, while in 2024 it was shortened to Poa_jem
+# In 2010 Silene acaulis was shortened to Sil acu, while in 2024 it was shortened to Sil_aca
+
+
+
+# We create the clean objects----
+
+filefjell_1972_2010_clean <- filefjell_1972_2010_tidy |> 
+  left_join(filefjell_summit_data_tidy |> select(summit, elevation), by = "summit", suffix = c("", "_correct")) |> 
+  select(!elevation) |> 
+  rename(elevation = elevation_correct) |> 
+  relocate(elevation, .after = summit) |> 
+  mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan", 
+                             species == "Jun_trif" ~ "Jun_tri", 
+                             species == "Poa_x_jem" ~ "Poa_jem", 
+                             species == "Sil_acu" ~ "Sil_aca", 
+                             TRUE ~ species))
+
+filefjell_2024_clean <- filefjell_2024_tidy |> 
+  left_join(filefjell_summit_data_tidy |> select(summit, elevation), by = "summit", suffix = c("", "_correct")) |> 
+  select(!elevation) |> 
+  rename(elevation = elevation_correct) |> 
+  relocate(elevation, .after = summit) |> 
+  mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
+                             TRUE ~ species))
+
+filefjell_clean_lost <- 
+  filefjell_1972_2010_clean |> 
+  select(species) |> 
+  arrange(species) |> 
+  distinct() |> 
+  anti_join(filefjell_2024_clean |> 
+              select(species) |> 
+              arrange(species) |> 
+              distinct())
+
+filefjell_clean_new <- 
+  filefjell_2024_clean |> 
+  select(species) |> 
+  arrange(species) |> 
+  distinct() |> 
+  anti_join(filefjell_1972_2010_clean |> 
+              select(species) |> 
+              arrange(species) |> 
+              distinct())
+
+
+filefjell_all_years <- filefjell_1972_2010_clean |> 
+  rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance))
