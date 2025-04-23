@@ -120,4 +120,5 @@ filefjell_clean_new <-
 
 
 filefjell_all_years <- filefjell_1972_2010_clean |> 
-  rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance))
+  rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
+  arrange(year, summit, species)
