@@ -13,7 +13,7 @@ tar_option_set(
 )
 
 # R scripts in the R/ folder with custom functions:
-tar_source("Scripts/Functions.R")
+tar_source("functions.R")
 
 # List of targets:
 list(
@@ -101,6 +101,7 @@ list(
   tar_target(
     name = filefjell_all_years, 
     command = filefjell_1972_2010_clean |> 
-      rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance))
+      rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
+      arrange(year, summit, species)
   )
 )
