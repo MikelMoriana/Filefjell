@@ -3,7 +3,7 @@
 library(tidyverse)
 library(janitor)
 
-filefjell_1972_2010 <- read_csv2("Raw_data/Filefjell_1972_2010.csv")
+filefjell_1972_2009 <- read_csv2("Raw_data/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("Raw_data/Filefjell_2024.csv")
 filefjell_summit_data <- read_csv("Raw_data/Summit_data.csv")
 
@@ -11,9 +11,9 @@ filefjell_summit_data <- read_csv("Raw_data/Summit_data.csv")
 
 # Tidying the data----
 
-# We tidy and make the 1972 and 2010 data long
+# We tidy and make the 1972 and 2009 data long
 
-filefjell_1972_2010_tidy <- filefjell_1972_2010 |> 
+filefjell_1972_2009_tidy <- filefjell_1972_2009 |> 
   relocate(Year) |> 
   mutate(Summit = str_replace_all(Summit, " ", "_")) |> 
   rename(Elevation = Height) |> 
@@ -52,7 +52,7 @@ filefjell_summit_data_tidy <- filefjell_summit_data |>
 
 # Species names
 
-filefjell_tidy_lost <- filefjell_1972_2010_tidy |> 
+filefjell_tidy_lost <- filefjell_1972_2009_tidy |> 
   select(species) |> 
   arrange(species) |> 
   distinct() |> 
@@ -65,21 +65,21 @@ filefjell_tidy_new <- filefjell_2024_tidy |>
   select(species) |> 
   arrange(species) |> 
   distinct() |> 
-  anti_join(filefjell_1972_2010_tidy |> 
+  anti_join(filefjell_1972_2009_tidy |> 
               select(species) |> 
               arrange(species) |> 
               distinct())
-# In 2010 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 as well
-# In 2010 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan
-# In 2010 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri
-# In 2010 Poa x jemtlandica was shortened to Poa x jem, while in 2024 it was shortened to Poa_jem
-# In 2010 Silene acaulis was shortened to Sil acu, while in 2024 it was shortened to Sil_aca
+# In 2009 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 as well
+# In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan
+# In 2009 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri
+# In 2009 Poa x jemtlandica was shortened to Poa x jem, while in 2024 it was shortened to Poa_jem
+# In 2009 Silene acaulis was shortened to Sil acu, while in 2024 it was shortened to Sil_aca
 
 
 
 # We create the clean objects----
 
-filefjell_1972_2010_clean <- filefjell_1972_2010_tidy |> 
+filefjell_1972_2009_clean <- filefjell_1972_2009_tidy |> 
   left_join(filefjell_summit_data_tidy |> select(summit, elevation), by = "summit", suffix = c("", "_correct")) |> 
   select(!elevation) |> 
   rename(elevation = elevation_correct) |> 
@@ -99,7 +99,7 @@ filefjell_2024_clean <- filefjell_2024_tidy |>
                              TRUE ~ species))
 
 filefjell_clean_lost <- 
-  filefjell_1972_2010_clean |> 
+  filefjell_1972_2009_clean |> 
   select(species) |> 
   arrange(species) |> 
   distinct() |> 
@@ -113,12 +113,12 @@ filefjell_clean_new <-
   select(species) |> 
   arrange(species) |> 
   distinct() |> 
-  anti_join(filefjell_1972_2010_clean |> 
+  anti_join(filefjell_1972_2009_clean |> 
               select(species) |> 
               arrange(species) |> 
               distinct())
 
 
-filefjell_all_years <- filefjell_1972_2010_clean |> 
+filefjell_all_years <- filefjell_1972_2009_clean |> 
   rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
-  arrange(year, summit, species)
+  arrange(desc(elevation), year, species)
