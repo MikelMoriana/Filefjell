@@ -119,6 +119,6 @@ filefjell_clean_new <-
               distinct())
 
 
-filefjell_all_years <- filefjell_1972_2009_clean |> 
+filefjell_data_clean <- filefjell_1972_2009_clean |> 
   rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
   arrange(desc(elevation), year, species)
