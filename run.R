@@ -28,18 +28,20 @@ nodes <- vis_data$x$nodes |>
     name == "filefjell_1972_2009_clean" ~ -50, 
     name == "filefjell_2024_clean" ~ 50, 
     # 5
-    name == "filefjell_all_years" ~ 0, 
+    name == "filefjell_data_clean" ~ 0, 
     # 6
-    name == "filefjell_distance" ~ -100, 
-    name == "filefjell_richness" ~ 0, 
-    name == "filefjell_turnover" ~ 150, 
+    name == "distance_change_data" ~ -100, 
+    name == "richness_data" ~ 0, 
+    name == "species_turnover_data" ~ 150, 
     # 7
-    name == "filefjell_distance_change" ~ -100, 
-    name == "richness_mod" ~ 0, 
-    name == "filefjell_lost_aov" ~ 100, 
-    name == "filefjell_new_aov" ~ 200, 
+    name == "distance_change_rate_mod" ~ -100, 
+    name == "richness_change_data" ~ 0, 
+    name == "turnover_data" ~ 150, 
+    name == "colonizers_data" ~ 250, 
     # 8
-    name == "distance_change_model" ~ -100, 
+    name == "richness_change_rate_mod" ~ 0, 
+    name == "lost_rate_mod" ~ 100, 
+    name == "new_rate_mod" ~ 200, 
     # Others
     name == "adj_label" ~ 200, 
     name == "colour_mapping" ~ 300, 
