@@ -100,86 +100,117 @@ list(
                                  TRUE ~ species))
   ), 
   tar_target(
-    name = filefjell_all_years, 
+    name = filefjell_data_clean, 
     command = filefjell_1972_2009_clean |> 
       rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
       arrange(desc(elevation), year, species)
   ), 
   # Distance to top----
   tar_target(
-    name = filefjell_distance, 
-    command = filefjell_all_years |> 
+    name = distance_change_data,
+    command = filefjell_data_clean |> 
       pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-      filter(!is.na(y1972) & !is.na(y2009) & !is.na(y2024)) |> 
-      pivot_longer(cols = c("y1972", "y2009", "y2024"), names_prefix = "y", names_to = "year", values_to = "distance") |> 
-      relocate(year) |> 
-      mutate(year = as.numeric(year))
-  ), 
-  tar_target(
-    name = filefjell_distance_change, 
-    command = filefjell_distance |> 
-      pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-      mutate(int1 = y2009 - y1972, 
-             int2 = y2024 - y2009) |> 
-      select(-c(y1972, y2009, y2024)) |> 
+      mutate(int1 = case_when(is.na(y2009) ~ NA, 
+                              !is.na(y2009) & is.na(y1972) ~ y2009 - 33, 
+                              !is.na(y2009) & !is.na(y1972) ~ y2009 - y1972), 
+             int2 = case_when(is.na(y2024) ~ NA, 
+                              !is.na(y2024) & is.na(y2009) ~ y2024 - 33, 
+                              !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009)) |> 
+      select(-c(y1972, y2009, y2024)) |>
       pivot_longer(cols =c("int1", "int2"), names_to = "interval", values_to = "distance_change") |> 
-      mutate(interval = as.factor(interval))
-  ), 
+      mutate(distance_change_rate = case_when(interval == "int1" ~ distance_change / 37, 
+                                              interval == "int2" ~ distance_change / 15)) |> 
+      filter(!is.na(distance_change)) |> 
+      mutate(interval = as.factor(interval)) |> 
+      arrange(summit, species, interval)
+  ),
   tar_target(
-    name = distance_change_model, 
+    name = distance_change_rate_mod,
     command = glmmTMB(
-      distance_change ~ 
-        interval + (1 | summit) + (1 | species), 
-      family = gaussian, 
-      data = filefjell_distance_change)
-  ), 
+      distance_change_rate ~
+        interval + (1 | summit) + (1 | species),
+      family = gaussian,
+      data = distance_change_data)
+  ),
   # Richness----
   tar_target(
-    name = filefjell_richness, 
-    command = filefjell_all_years |> 
-      summarise(.by = c(year, summit, elevation), 
+    name = richness_data,
+    command = filefjell_data_clean |>
+      summarise(.by = c(year, summit, elevation),
                 richness = n())
   ), 
   tar_target(
-    name = richness_mod, 
-    command = glmer(
-      richness ~ 
-        bs(year, knots = c(2009)) + 
-        (1 | summit), 
-      family = poisson, 
-      data = filefjell_richness)
+    name = richness_change_data, 
+    command = richness_data |> 
+      pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |> 
+      mutate(int1 = y2009 - y1972, 
+             int2 = y2024 - y2009) |> 
+      select(-c(y1972, y2009, y2024)) |> 
+      pivot_longer(cols = c(int1, int2), names_to = "interval", values_to = "richness_change") |> 
+      mutate(richness_change_rate = case_when(interval == "int1" ~ richness_change / 37, 
+                                              interval == "int2" ~ richness_change / 15)) |> 
+      mutate(interval = as.factor(interval))
   ), 
+  tar_target(
+    name = richness_change_rate_mod, 
+    command = glmmTMB(
+      richness_change_rate ~ 
+        interval + (1 | summit), 
+      family = gaussian, 
+      data = richness_change_data)
+  ),
   # Turnover----
   tar_target(
-    name = filefjell_turnover, 
-    command = filefjell_all_years |> 
-      mutate(presence = ifelse(!is.na(distance), 1, 0)) |> 
-      select(-distance) |> 
-      arrange(species) |> 
-      pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |> 
-      arrange(summit, species) |> 
-      mutate(turnover09 = y2009 - y1972) |> 
-      mutate(turnover24 = y2024 - y2009) |> 
-      summarise(.by = summit, 
-                int1_lost = sum(turnover09 == -1), 
-                int1_nochange = sum(turnover09 == 0), 
-                int1_new = sum(turnover09 == 1), 
-                int2_lost = sum(turnover24 == -1), 
-                int2_nochange = sum(turnover24 == 0), 
-                int2_new = sum(turnover24 == 1)) |> 
-      pivot_longer(cols = starts_with("int"), 
-                   names_to = c("interval", ".value"), 
-                   names_sep = "_") |> 
-      mutate(number_years = ifelse(interval == "int1", 37, 15)) |> 
-      mutate(lost_rate = lost / number_years, 
+    name = species_turnover_data,
+    command = filefjell_data_clean |>
+      mutate(presence = ifelse(!is.na(distance), 1, 0)) |>
+      select(-distance) |>
+      arrange(species) |>
+      pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |>
+      arrange(summit, species) |>
+      mutate(turnover09 = y2009 - y1972) |>
+      mutate(turnover24 = y2024 - y2009)
+    ),
+  tar_target(
+    name = turnover_data,
+    command = species_turnover_data |>
+      summarise(.by = summit,
+                int1_lost = sum(turnover09 == -1),
+                int1_nochange = sum(turnover09 == 0),
+                int1_new = sum(turnover09 == 1),
+                int2_lost = sum(turnover24 == -1),
+                int2_nochange = sum(turnover24 == 0),
+                int2_new = sum(turnover24 == 1)) |>
+      pivot_longer(cols = starts_with("int"),
+                   names_to = c("interval", ".value"),
+                   names_sep = "_") |>
+      mutate(number_years = ifelse(interval == "int1", 37, 15)) |>
+      mutate(lost_rate = lost / number_years,
              new_rate = new / number_years)
-  ), 
+  ),
   tar_target(
-    name = filefjell_lost_aov, 
-    command = aov(lost_rate ~ interval, data = filefjell_turnover)
-  ), 
+    name = lost_rate_mod, 
+    command = glmmTMB(
+      lost_rate ~ 
+        interval + (1 | summit), 
+      family = gaussian, 
+      data = turnover_data)
+  ),
   tar_target(
-    name = filefjell_new_aov, 
-    command = aov(new_rate ~ interval, data = filefjell_turnover)
+    name = new_rate_mod, 
+    command = glmmTMB(
+        new_rate ~ 
+          interval + (1 | summit), 
+        family = gaussian, 
+        data = turnover_data)
+  ),
+  # New species per nature type
+  tar_target(
+    name = colonizers_data,
+    command = filefjell_2024_clean |>
+      semi_join(
+        species_turnover_data |>
+          filter(turnover24 == 1) |>
+          select(summit:species))
   )
 )
