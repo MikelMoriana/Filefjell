@@ -16,46 +16,66 @@ conflict_prefer("margin", "ggplot2")
 source("functions.R")
 
 
-filefjell_all_years <- tar_read(filefjell_all_years) |> 
+filefjell_data_clean <- tar_read(filefjell_data_clean) |> 
   filter(summit != "Krekanosi_S") |> 
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Slettningseggi", "Krekahoegdi")))
 
 
 # Distance
 
-filefjell_distance <- filefjell_all_years |> 
-  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-  filter(!is.na(y1972) & !is.na(y2009) & !is.na(y2024)) |> 
-  pivot_longer(cols = c("y1972", "y2009", "y2024"), names_prefix = "y", names_to = "year", values_to = "distance") |> 
-  relocate(year) |> 
-  mutate(year = as.numeric(year))
+# distance_data <- filefjell_data_clean |> 
+#   pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
+#   filter(!is.na(y1972) & !is.na(y2009) & !is.na(y2024)) |> 
+#   pivot_longer(cols = c("y1972", "y2009", "y2024"), names_prefix = "y", names_to = "year", values_to = "distance") |> 
+#   relocate(year) |> 
+#   mutate(year = as.numeric(year))
 
-filefjell_distance_change <- filefjell_distance |> 
+distance_change_data <- filefjell_data_clean |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-  mutate(int1 = y2009 - y1972, 
-         int2 = y2024 - y2009) |> 
-  select(-c(y1972, y2009, y2024)) |> 
+  mutate(int1 = case_when(is.na(y2009) ~ NA, 
+                          !is.na(y2009) & is.na(y1972) ~ y2009 - 33, 
+                          !is.na(y2009) & !is.na(y1972) ~ y2009 - y1972), 
+         int2 = case_when(is.na(y2024) ~ NA, 
+                          !is.na(y2024) & is.na(y2009) ~ y2024 - 33, 
+                          !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009)) |> 
+  select(-c(y1972, y2009, y2024)) |>
   pivot_longer(cols =c("int1", "int2"), names_to = "interval", values_to = "distance_change") |> 
-  mutate(interval = as.factor(interval))
+  mutate(distance_change_rate = case_when(interval == "int1" ~ distance_change / 37, 
+                                          interval == "int2" ~ distance_change / 15)) |> 
+  filter(!is.na(distance_change)) |> 
+  mutate(interval = as.factor(interval)) |> 
+  arrange(summit, species, interval)
 
 
 # Richness
 
-filefjell_richness <- filefjell_all_years |> 
+richness_data <- filefjell_data_clean |> 
   summarise(.by = c(year, summit, elevation), 
             richness = n())
+
+richness_change_data <- richness_data |> 
+  pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |> 
+  mutate(int1 = y2009 - y1972, 
+         int2 = y2024 - y2009) |> 
+  select(-c(y1972, y2009, y2024)) |> 
+  pivot_longer(cols = c(int1, int2), names_to = "interval", values_to = "richness_change") |> 
+  mutate(richness_change_rate = case_when(interval == "int1" ~ richness_change / 37, 
+                                          interval == "int2" ~ richness_change / 15)) |> 
+  mutate(interval = as.factor(interval))
 
 
 # Turnover
 
-filefjell_turnover <- filefjell_all_years |> 
+species_turnover_data <- filefjell_data_clean |> 
   mutate(presence = ifelse(!is.na(distance), 1, 0)) |> 
   select(-distance) |> 
   arrange(species) |> 
   pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |> 
   arrange(summit, species) |> 
   mutate(turnover09 = y2009 - y1972) |> 
-  mutate(turnover24 = y2024 - y2009) |> 
+  mutate(turnover24 = y2024 - y2009)
+
+turnover_data <- species_turnover_data |> 
   summarise(.by = summit, 
             int1_lost = sum(turnover09 == -1), 
             int1_nochange = sum(turnover09 == 0), 
@@ -70,6 +90,16 @@ filefjell_turnover <- filefjell_all_years |>
   mutate(lost_rate = lost / number_years, 
          new_rate = new / number_years)
 
+
+# New species by nature type
+
+filefjell_2024_data <- tar_read(filefjell_2024_clean)
+
+colonizers_data <- filefjell_2024_data |> 
+  semi_join(
+    species_turnover |> 
+      filter(turnover24 == 1) |> 
+      select(summit:species))
 
 
 # community_order <- community_data |> 
@@ -90,12 +120,11 @@ filefjell_turnover <- filefjell_all_years |>
 
 
 
+# Distance. All species----
 
-# Distance to top----
+## Exploratory graphs
 
-## Exploratoy graphs
-
-filefjell_distance |> 
+filefjell_data_clean |> 
   ggplot(aes(x = as.factor(year), y = distance)) +
   geom_violin() + 
   labs(title = " Distances by Year",
@@ -103,7 +132,7 @@ filefjell_distance |>
        y = "Vertical Distance to Top (meters)") +
   theme_minimal()
 
-filefjell_distance |> 
+filefjell_data_clean |> 
   ggplot(aes(x = summit:as.factor(year), y = distance, color = summit)) +
   geom_boxplot() +
   labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
@@ -112,7 +141,7 @@ filefjell_distance |>
   theme_minimal() +
   theme(legend.position = "none")
 
-filefjell_distance |> 
+filefjell_data_clean |> 
   ggplot(aes(x = year, y = distance, color = species)) + 
   facet_wrap(~summit) + 
   geom_line() +
@@ -122,12 +151,121 @@ filefjell_distance |>
   theme_minimal() +
   theme(legend.position = "none")
 
-# There seems to be a lot of variation in the second period
+
+## Modelling
+
+distance_all_modsp1 <- glmer(
+  distance ~ 
+    bs(year, knots = c(2009), degree = 1) + (1 | species), 
+  family = poisson, 
+  data = filefjell_data_clean)
+# If I were to consider summit
+# distance_modsp2 <- glm(
+#   distance ~ 
+#     bs(year, knots = c(2009), degree = 1) + summit, 
+#   family = poisson, 
+#   data = distance)
+# anova(distance_modsp1, distance_modsp2) # I keep the interaction
+
+distance_all_modsp1 |> summary()
 
 
-## I am not interested in the distance per se, but in change in distance. I check that
+distance_all_predicted <- distance_all_modsp1 |> 
+  ggpredict(terms = c("year")) |> 
+  rename(year = x, summit = group)
 
-filefjell_distance_change |> 
+distance_all_mod_graph <- 
+  ggplot() + 
+  geom_jitter(data = filefjell_data_clean, aes(x = year, y = distance), size = 2, width = 0.5, height = 0.5) + # Points for each observation
+  geom_hline(yintercept = c(10, 20, 30), colour = "lightgrey") + 
+  geom_line(data = distance_all_predicted, aes(x = year, y = predicted), lwd = 0.75, colour = "blue") + # Line for predicted values
+  geom_ribbon(data = distance_all_predicted, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "blue", alpha = 0.2) + # Confidence interval
+  labs(x = "Year", y = "Distance to top") +
+  theme_classic() + 
+  theme(text = element_text(size = 20, family = "serif"), 
+        axis.title.x = element_text(margin = margin(t = 5, r = 0, b = 0, l = 0)), 
+        axis.title.y = element_text(margin = margin(t = 0, r = 5, b = 0, l = 0)))
+distance_all_mod_graph
+distance_all_mod_graph |> ggsave(file = "Graphs/Distance_all.jpeg")
+
+
+
+
+# Distance. Only species found all three years----
+
+## Exploratory graphs
+
+distance_data |> 
+  ggplot(aes(x = as.factor(year), y = distance)) +
+  geom_violin() + 
+  labs(title = " Distances by Year",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal()
+
+distance_data |> 
+  ggplot(aes(x = summit:as.factor(year), y = distance, color = summit)) +
+  geom_boxplot() +
+  labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+distance_data |> 
+  ggplot(aes(x = year, y = distance, color = species)) + 
+  facet_wrap(~summit) + 
+  geom_line() +
+  labs(title = "Scatter Plot of Vertical Distances by Year for Each Mountain",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# There seems to be a lot of variation
+
+
+## Modelling
+
+distance_modsp1 <- glmer(
+  distance ~ 
+    bs(year, knots = c(2009), degree = 1) + (1 | species), 
+  family = poisson, 
+  data = distance_data)
+# If I were to consider summit
+# distance_modsp2 <- glm(
+#   distance ~ 
+#     bs(year, knots = c(2009), degree = 1) + summit, 
+#   family = poisson, 
+#   data = distance)
+# anova(distance_modsp1, distance_modsp2) # I keep the interaction
+
+distance_modsp1 |> summary()
+
+distance_predicted <- distance_modsp1 |> 
+  ggpredict(terms = c("year")) |> 
+  rename(year = x, summit = group)
+
+distance_mod_graph <- 
+  ggplot() + 
+  geom_jitter(data = distance, aes(x = year, y = distance), size = 2, width = 0.5, height = 0.5) + # Points for each observation
+  geom_hline(yintercept = c(10, 20, 30), colour = "lightgrey") + 
+  geom_line(data = distance_predicted, aes(x = year, y = predicted), lwd = 0.75, colour = "blue") + # Line for predicted values
+  geom_ribbon(data = distance_predicted, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "blue", alpha = 0.2) + # Confidence interval
+  labs(x = "Year", y = "Distance to top") +
+  theme_classic() + 
+  theme(text = element_text(size = 20, family = "serif"), 
+        axis.title.x = element_text(margin = margin(t = 5, r = 0, b = 0, l = 0)), 
+        axis.title.y = element_text(margin = margin(t = 0, r = 5, b = 0, l = 0)))
+distance_mod_graph
+distance_mod_graph |> ggsave(file = "Graphs/Distance.jpeg")
+
+
+
+
+# Distance change----
+
+distance_change_data |> 
   ggplot(aes(x = interval, y = distance_change)) +
   geom_violin() + 
   labs(title = " Distances by Year",
@@ -135,7 +273,7 @@ filefjell_distance_change |>
        y = "Vertical Distance to Top (meters)") +
   theme_minimal()
 
-filefjell_distance_change |> 
+distance_change_data |> 
   ggplot(aes(x = summit:interval, y = distance_change, color = summit)) +
   geom_boxplot() +
   labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
@@ -144,7 +282,154 @@ filefjell_distance_change |>
   theme_minimal() +
   theme(legend.position = "none")
 
-filefjell_distance_change |> 
+distance_change_data |> 
+  ggplot(aes(x = interval, y = distance_change, color = species, group = species)) + 
+  facet_wrap(~summit) + 
+  geom_line() +
+  labs(title = "Scatter Plot of Vertical Distances by Year for Each Mountain",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+## Modelling change
+
+hist(distance_change_data$distance_change)
+
+distance_change_mod <- glmmTMB(
+  distance_change ~ 
+    interval + (1 | summit) + (1 | species), 
+  family = gaussian, 
+  data = distance_change_data)
+
+# distance_change_mod |> model_diagnosis()
+# distance_change_mod |> model_homoscedasticity()
+distance_change_mod |> summary()
+
+
+distance_change_predicted <- distance_change_mod |> 
+  ggpredict(terms = c("interval")) |> 
+  rename(interval = x)
+
+distance_mod_graph <- 
+  ggplot() + 
+  geom_violin(data = distance_change_data, aes(x = interval, y = distance_change)) + 
+  geom_hline(yintercept = 0, colour = "black") + 
+  geom_hline(yintercept = c(-30, -15, 15, 30), colour = "lightgrey") + 
+  geom_line(data = distance_change_predicted, aes(x = as.numeric(interval), y = predicted), lwd = 0.75, colour = "blue") + # Line for predicted values
+  geom_ribbon(data = distance_change_predicted, aes(x = as.numeric(interval), ymin = conf.low, ymax = conf.high), fill = "blue", alpha = 0.2) + # Confidence interval
+  labs(x = "Interval", y = "Distance to top") +
+  theme_classic() + 
+  theme(text = element_text(size = 20, family = "serif"), 
+        axis.title.x = element_text(margin = margin(t = 5, r = 0, b = 0, l = 0)), 
+        axis.title.y = element_text(margin = margin(t = 0, r = 5, b = 0, l = 0)))
+distance_mod_graph
+distance_mod_graph |> ggsave(file = "Graphs/Distance.jpeg")
+
+
+
+# Distance change. Rate----
+
+distance_change_data |> 
+  ggplot(aes(x = interval, y = distance_change_rate)) +
+  geom_violin() + 
+  labs(title = " Distances by Year",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal()
+
+distance_change_data |> 
+  ggplot(aes(x = summit:interval, y = distance_change_rate, color = summit)) +
+  geom_boxplot() +
+  labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+distance_change_data |> 
+  ggplot(aes(x = interval, y = distance_change_rate, color = species, group = species)) + 
+  facet_wrap(~summit) + 
+  geom_line() +
+  labs(title = "Scatter Plot of Vertical Distances by Year for Each Mountain",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+## Modelling change
+
+hist(distance_change_data$distance_change_rate)
+
+distance_change_rate_mod <- glmmTMB(
+  distance_change_rate ~ 
+    interval + (1 | summit) + (1 | species), 
+  family = gaussian, 
+  data = distance_change_data)
+
+# distance_change_mod |> model_diagnosis()
+# distance_change_mod |> model_homoscedasticity()
+distance_change_rate_mod |> summary()
+
+
+
+# Distance. Species not in the top get a distance of 33----
+
+## Exploratoy graphs
+
+distance33 |> 
+  ggplot(aes(x = as.factor(year), y = adj_distance)) +
+  geom_violin() + 
+  labs(title = " Distances by Year",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal()
+
+distance33 |> 
+  ggplot(aes(x = summit:as.factor(year), y = adj_distance, color = summit)) +
+  geom_boxplot() +
+  labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+distance33 |> 
+  ggplot(aes(x = year, y = adj_distance, color = species)) + 
+  facet_wrap(~summit) + 
+  geom_line() +
+  labs(title = "Scatter Plot of Vertical Distances by Year for Each Mountain",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Difficult to say anything
+# All models give huge errors
+
+
+## I am not interested in the distance per se, but in change in distance. I check that
+
+distance33_change |> 
+  ggplot(aes(x = interval, y = distance_change)) +
+  geom_violin() + 
+  labs(title = " Distances by Year",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal()
+
+distance33_change |> 
+  ggplot(aes(x = summit:interval, y = distance_change, color = summit)) +
+  geom_boxplot() +
+  labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+distance33_change |> 
   ggplot(aes(x = interval, y = distance_change, color = species, group = species)) + 
   facet_wrap(~summit) + 
   geom_line() +
@@ -158,17 +443,47 @@ filefjell_distance_change |>
 
 ## Modelling
 
-hist(filefjell_distance_change$distance_change)
+hist(distance33_change$distance_change)
 
-distance_change_model <- glmmTMB(
+distance33_change_mod <- glmmTMB(
   distance_change ~ 
     interval + (1 | summit) + (1 | species), 
   family = gaussian, 
-  data = filefjell_distance_change)
+  data = distance33_change)
 
-# distance_change_model |> model_diagnosis()
-# distance_change_model |> model_homoscedasticity()
-distance_change_model |> summary()
+# distance_change_mod |> model_diagnosis()
+# distance_change_mod |> model_homoscedasticity()
+distance33_change_mod |> summary()
+
+
+
+
+
+
+
+# Each interval by its own----
+
+distance_int1 <- filefjell_data_clean |> 
+  filter(year != 2024) |> 
+  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
+  filter(!is.na(y1972) & !is.na(y2009)) |> 
+  pivot_longer(cols = c("y1972", "y2009"), names_prefix = "y", names_to = "year", values_to = "distance") |> 
+  relocate(year)
+
+distance_int1_aov <- aov(distance ~ year, data = distance_int1)
+distance_int1_aov |> summary()
+
+
+distance_int2 <- filefjell_data_clean |> 
+  filter(year != 1972) |> 
+  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
+  filter(!is.na(y2009) & !is.na(y2024)) |> 
+  pivot_longer(cols = c("y2009", "y2024"), names_prefix = "y", names_to = "year", values_to = "distance") |> 
+  relocate(year)
+
+distance_int2_aov <- aov(distance ~ year, data = distance_int2)
+distance_int2_aov |> summary()
+
 
 
 
@@ -177,7 +492,7 @@ distance_change_model |> summary()
 
 ## Exploratoy graphs
 
-filefjell_richness |> 
+richness_data |> 
   ggplot(aes(x = as.factor(year), y = richness)) +
   geom_violin() + 
   labs(title = " Distances by Year",
@@ -185,7 +500,7 @@ filefjell_richness |>
        y = "Vertical Distance to Top (meters)") +
   theme_minimal()
 
-filefjell_richness |> 
+richness_data |> 
   ggplot(aes(x = year, y = richness, color = summit)) +
   geom_line(lwd = 3) +
   labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
@@ -196,7 +511,6 @@ filefjell_richness |>
 # Some summits gained species at a faster rate, some at a slower, and some lost species in the second interval
 
 
-
 ## Modelling
 
 richness_mod <- glmer(
@@ -204,50 +518,79 @@ richness_mod <- glmer(
     bs(year, knots = c(2009)) + 
     (1 | summit), 
   family = poisson, 
-  data = filefjell_richness)
+  data = richness_data)
 richness_mod |> model_diagnosis()
 richness_mod |> summary()
 
 
-filefjell_richness_predicted <- richness_mod |> 
+richness_predicted <- richness_mod |> 
   ggpredict(terms = "year") |> 
   rename(year = x)
 
-richness_model_graph <- ggplot() + 
-  geom_point(data = filefjell_richness, aes(x = year, y = richness), size = 2) + # Points for each observation
+richness_mod_graph <- ggplot() + 
+  geom_point(data = richness_data, aes(x = year, y = richness), size = 2) + # Points for each observation
   geom_hline(yintercept = c(20, 40, 60, 80), colour = "lightgrey") + 
-  geom_line(data = filefjell_richness_predicted, aes(x = year, y = predicted), lwd = 0.75, colour = "blue") + # Line for predicted values
-  geom_ribbon(data = filefjell_richness_predicted, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "blue", alpha = 0.2) + # Confidence interval
+  geom_line(data = richness_predicted, aes(x = year, y = predicted), lwd = 0.75, colour = "blue") + # Line for predicted values
+  geom_ribbon(data = richness_predicted, aes(x = year, ymin = conf.low, ymax = conf.high), fill = "blue", alpha = 0.2) + # Confidence interval
   labs(x = "Year", y = "Richness") +
   theme_classic() + 
   theme(text = element_text(size = 20, family = "serif"), 
         axis.title.x = element_text(margin = margin(t = 5, r = 0, b = 0, l = 0)), 
         axis.title.y = element_text(margin = margin(t = 0, r = 5, b = 0, l = 0)))
-richness_model_graph
-richness_model_graph |> ggsave(file = "Graphs/Richness.jpeg")
+richness_mod_graph
+richness_mod_graph |> ggsave(file = "Graphs/Richness.jpeg")
 
 
-# Rate of species increase in interval 1
-(filefjell_richness_predicted[2, 2] - filefjell_richness_predicted[1, 2]) / (filefjell_richness_predicted[2, 1] - filefjell_richness_predicted[1, 1])
 
-# Rate of species increase in interval 2
-(filefjell_richness_predicted[3, 2] - filefjell_richness_predicted[2, 2]) / (filefjell_richness_predicted[3, 1] - filefjell_richness_predicted[2, 1])
+# Richness change----
+
+## Exploratoy graphs
+
+richness_change_data |> 
+  ggplot(aes(x = interval, y = richness_change_rate)) +
+  geom_violin() + 
+  labs(title = " Distances by Year",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal()
+
+richness_change_data |> 
+  ggplot(aes(x = summit:interval, y = richness_change_rate, color = summit)) +
+  geom_point() +
+  labs(title = "Plot of richness change per year",
+       x = "Year",
+       y = "Richness change (species/year)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Some summits gained species at a faster rate, some at a slower, and some lost species in the second interval
+
+
+## Modelling
+
+richness_change_rate_mod <- glmmTMB(
+  richness_change_rate ~ 
+    interval + (1 | summit), 
+  family = gaussian, 
+  data = richness_change_data)
+
+richness_change_rate_mod |> model_diagnosis()
+richness_change_rate_mod |> summary()
 
 
 
 
 # Turnover----
 
-filefjell_turnover |> 
+turnover_data |> 
   summarise(.by = interval,
             lost_mean = mean(lost), 
             nochange_mean = mean(nochange), 
             new_mean = mean(new))
 
-filefjell_turnover |> 
+turnover_data |> 
   summarise(.by = interval,
             lost_mean = mean(lost_rate), 
-            nochange_mean = mean(nochange_rate), 
             new_mean = mean(new_rate))
 
 # I don't analyse or plot nochange. One being greater than the other is just a measure of richness, not of change
@@ -255,27 +598,40 @@ filefjell_turnover |>
 
 # Lost species
 
-filefjell_turnover |> 
+turnover_data |> 
   ggplot(aes(x = interval, y = lost_rate)) + 
   geom_violin()
 
-filefjell_lost_aov <- aov(lost_rate ~ interval, data = filefjell_turnover)
-filefjell_lost_aov |> summary()
-# Greater species lost in the second period
+lost_rate_mod <- glmmTMB(
+  lost_rate ~ 
+    interval + (1 | summit), 
+  family = gaussian, 
+  data = turnover_data)
+
+lost_rate_mod |> model_diagnosis()
+lost_rate_mod |> summary()
+# Greater species loss in the second period
 
 
 # New species
 
-filefjell_turnover |> 
+turnover_data |> 
   ggplot(aes(x = interval, y = new_rate)) + 
   geom_violin()
 
-filefjell_new_aov <- aov(new_rate ~ interval, data = filefjell_turnover)
-filefjell_new_aov |> summary()
-# Fewer new species in the second period
+new_rate_mod <- glmmTMB(
+  new_rate ~ 
+    interval + (1 | summit), 
+  family = gaussian, 
+  data = turnover_data)
+
+new_rate_mod |> model_diagnosis()
+new_rate_mod |> summary()
+
+# Fewer new species in the second period, but not significantly
 
 
-turnover_raw_graph <- filefjell_turnover |> 
+turnover_raw_graph <- turnover |> 
   select(summit, interval, lost_rate, new_rate) |> 
   pivot_longer(cols = c(lost_rate, new_rate), names_to = "species_change", values_to = "change") |> 
   ggplot(aes(x = interval, y = change, fill = interval)) + 
@@ -295,6 +651,27 @@ turnover_raw_graph <- filefjell_turnover |>
         legend.text = element_text(margin = margin(l = 09, r = 20)))
 turnover_raw_graph
 turnover_raw_graph |> ggsave(file = "Graphs/Turnover.jpeg")
+
+
+
+
+# Colonizers. When doing this analysis consider whether species present in 1972 (that disappeared in 2010) should be taken into account ----
+
+## Exploratoy graphs
+
+colonizers |> 
+  summarise(.by = c(type), colonizers = n()) |> 
+  ggplot(aes(x = type, y = colonizers)) +
+  geom_col() + 
+  labs(title = " Distances by Year",
+       x = "Year",
+       y = "Vertical Distance to Top (meters)") +
+  theme_minimal()
+
+
+
+
+
 
 
 
