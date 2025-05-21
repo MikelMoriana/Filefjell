@@ -6,6 +6,7 @@ library(janitor)
 filefjell_1972_2009 <- read_csv2("Raw_data/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("Raw_data/Filefjell_2024.csv")
 filefjell_summit_data <- read_csv("Raw_data/Summit_data.csv")
+filefjell_cover <- read_csv2("Raw_data/Type_cover.csv")
 
 
 
@@ -34,7 +35,9 @@ filefjell_2024_tidy <- filefjell_2024 |>
   rename(elevation = top_height) |> 
   mutate(distance = elevation - altitude) |> 
   select(-altitude) |> 
-  relocate(distance, .after = species)
+  relocate(distance, .after = species) |> 
+  mutate(hovedtype = str_extract(type, "[^C]*")) |> 
+  relocate(hovedtype, .before = type)
 
 # We tidy the summit data
 
@@ -42,9 +45,26 @@ filefjell_summit_data_tidy <- filefjell_summit_data |>
   clean_names() |> 
   mutate(summit = str_replace_all(summit, " ", "_"))
 
+# We tidy the cover data
+
+filefjell_cover_tidy <- filefjell_cover |> 
+  clean_names() |> 
+  relocate(year) |> 
+  mutate(date = dmy(date), 
+         recorder = str_replace_all(recorder, " \\+ ", "_"), 
+         type = ifelse(type == "Naken berg", "T1", type)) |> 
+  rename(cover = percentage)
+
+filefjell_hovedtype_cover <- filefjell_cover_tidy |> 
+  mutate(hovedtype = str_extract(type, "[^C]*")) |> 
+  relocate(hovedtype, .before = type) |> 
+  summarise(.by = c(year, summit,date, recorder, hovedtype), 
+            cover = sum(cover))
 
 
-# We correct some errors----
+
+
+# We identify errors to correct----
 
 # Summits' elevations
 # There are some differences among years in the summits elevations. We use the values from Norgeskart
@@ -96,7 +116,9 @@ filefjell_2024_clean <- filefjell_2024_tidy |>
   rename(elevation = elevation_correct) |> 
   relocate(elevation, .after = summit) |> 
   mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
-                             TRUE ~ species))
+                             TRUE ~ species)) |> 
+  left_join(filefjell_hovedtype_cover |> select(summit, hovedtype, cover), by = c("summit", "hovedtype")) |> 
+  relocate(cover, .after = type)
 
 filefjell_clean_lost <- 
   filefjell_1972_2009_clean |> 
@@ -121,4 +143,5 @@ filefjell_clean_new <-
 
 filefjell_data_clean <- filefjell_1972_2009_clean |> 
   rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
-  arrange(desc(elevation), year, species)
+  arrange(desc(elevation), year, species) |> 
+  mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
