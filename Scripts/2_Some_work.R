@@ -3,11 +3,11 @@
 library(conflicted)
 library(targets)
 library(tidyverse)
-library(vegan)
 library(glmmTMB)
-library(lme4)
-library(splines)
+library(DHARMa)
 library(ggeffects)
+library(vegan)
+
 
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
@@ -17,30 +17,66 @@ source("functions.R")
 
 
 filefjell_data_clean <- tar_read(filefjell_data_clean) |> 
-  filter(summit != "Krekanosi_S") |> 
-  mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Slettningseggi", "Krekahoegdi")))
+  filter(summit != "Krekanosi_S")
 
 
-# Distance
+## Distance
 
-distance_change_data <- filefjell_data_clean |> 
+altitude_change_data <- filefjell_data_clean |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-  mutate(int1 = case_when(is.na(y2009) ~ NA, 
+  mutate(per1 = case_when(is.na(y2009) ~ NA, 
                           !is.na(y2009) & is.na(y1972) ~ y2009 - 33, 
                           !is.na(y2009) & !is.na(y1972) ~ y2009 - y1972), 
-         int2 = case_when(is.na(y2024) ~ NA, 
+         per2 = case_when(is.na(y2024) ~ NA, 
                           !is.na(y2024) & is.na(y2009) ~ y2024 - 33, 
                           !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009)) |> 
+  select(-c(y1972, y2009, y2024)) |> 
+  pivot_longer(cols =c("per1", "per2"), names_to = "period", values_to = "distance_change") |> 
+  mutate(altitude_change = distance_change * -1) |> 
+  select(-distance_change) |> 
+  mutate(altitude_change_rate = case_when(period == "per1" ~ altitude_change / 37, 
+                                          period == "per2" ~ altitude_change / 15)) |> 
+  filter(!is.na(altitude_change)) |> 
+  mutate(period = as.factor(period)) |> 
+  arrange(summit, species, period)
+# Since we are using change, we decide to use change in altitude instead of change in distance, since it is more intuitive (we just need to multiply by minus one)
+
+# Considering only species found all three years
+altitude_change_three_data <- filefjell_data_clean |> 
+  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
+  filter(!is.na(y1972) & !is.na(y2009) & !is.na(y2024)) |> 
+  mutate(per1 = y2009 - y1972, 
+         per2 = y2024 - y2009) |> 
   select(-c(y1972, y2009, y2024)) |>
-  pivot_longer(cols =c("int1", "int2"), names_to = "interval", values_to = "distance_change") |> 
-  mutate(distance_change_rate = case_when(interval == "int1" ~ distance_change / 37, 
-                                          interval == "int2" ~ distance_change / 15)) |> 
-  filter(!is.na(distance_change)) |> 
-  mutate(interval = as.factor(interval)) |> 
-  arrange(summit, species, interval)
+  pivot_longer(cols =c("per1", "per2"), names_to = "period", values_to = "distance_change") |> 
+  mutate(altitude_change = distance_change * -1) |> 
+  select(-distance_change) |> 
+  mutate(altitude_change_rate = case_when(period == "per1" ~ altitude_change / 37, 
+                                          period == "per2" ~ altitude_change / 15)) |> 
+  mutate(period = as.factor(period)) |> 
+  arrange(summit, species, period)
+
+# Considering the two periods separately (i.e., all species found in both samplings of a period are considered)
+altitude_change_two_data <- filefjell_data_clean |> 
+  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
+  mutate(per1 = case_when(is.na(y1972) ~ NA, 
+                          is.na(y2009) ~ NA, 
+                          !is.na(y2009) & !is.na(y1972) ~ y2009 - y1972), 
+         per2 = case_when(is.na(y2009) ~ NA, 
+                          is.na(y2024) ~ NA, 
+                          !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009)) |> 
+  select(-c(y1972, y2009, y2024)) |> 
+  pivot_longer(cols =c("per1", "per2"), names_to = "period", values_to = "distance_change") |> 
+  mutate(altitude_change = distance_change * -1) |> 
+  select(-distance_change) |> 
+  mutate(altitude_change_rate = case_when(period == "per1" ~ altitude_change / 37, 
+                                          period == "per2" ~ altitude_change / 15)) |> 
+  filter(!is.na(altitude_change)) |> 
+  mutate(period = as.factor(period)) |> 
+  arrange(summit, species, period)
 
 
-# Richness
+## Richness
 
 richness_data <- filefjell_data_clean |> 
   summarise(.by = c(year, summit, elevation), 
@@ -48,13 +84,13 @@ richness_data <- filefjell_data_clean |>
 
 richness_change_data <- richness_data |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |> 
-  mutate(int1 = y2009 - y1972, 
-         int2 = y2024 - y2009) |> 
+  mutate(per1 = y2009 - y1972, 
+         per2 = y2024 - y2009) |> 
   select(-c(y1972, y2009, y2024)) |> 
-  pivot_longer(cols = c(int1, int2), names_to = "interval", values_to = "richness_change") |> 
-  mutate(richness_change_rate = case_when(interval == "int1" ~ richness_change / 37, 
-                                          interval == "int2" ~ richness_change / 15)) |> 
-  mutate(interval = as.factor(interval))
+  pivot_longer(cols = c(per1, per2), names_to = "period", values_to = "richness_change") |> 
+  mutate(richness_change_rate = case_when(period == "per1" ~ richness_change / 37, 
+                                          period == "per2" ~ richness_change / 15)) |> 
+  mutate(period = as.factor(period))
 
 
 # Turnover
@@ -70,30 +106,40 @@ species_turnover_data <- filefjell_data_clean |>
 
 turnover_data <- species_turnover_data |> 
   summarise(.by = summit, 
-            int1_lost = sum(turnover09 == -1), 
-            int1_nochange = sum(turnover09 == 0), 
-            int1_new = sum(turnover09 == 1), 
-            int2_lost = sum(turnover24 == -1), 
-            int2_nochange = sum(turnover24 == 0), 
-            int2_new = sum(turnover24 == 1)) |> 
-  pivot_longer(cols = starts_with("int"), 
-               names_to = c("interval", ".value"), 
+            per1_lost = sum(turnover09 == -1), 
+            per1_nochange = sum(turnover09 == 0), 
+            per1_new = sum(turnover09 == 1), 
+            per2_lost = sum(turnover24 == -1), 
+            per2_nochange = sum(turnover24 == 0), 
+            per2_new = sum(turnover24 == 1)) |> 
+  pivot_longer(cols = starts_with("per"), 
+               names_to = c("period", ".value"), 
                names_sep = "_") |> 
-  mutate(number_years = ifelse(interval == "int1", 37, 15)) |> 
+  mutate(number_years = ifelse(period == "per1", 37, 15)) |> 
   mutate(lost_rate = lost / number_years, 
-         new_rate = new / number_years)
+         new_rate = new / number_years) |> 
+  mutate(period = as.factor(period))
 
 
 # New species by nature type
 
-filefjell_2024_data <- tar_read(filefjell_2024_clean)
+filefjell_2024_clean <- tar_read(filefjell_2024_clean)
 
-colonizers_data <- filefjell_2024_data |> 
+colonizers_data <- filefjell_2024_clean |> 
   semi_join(
-    species_turnover |> 
+    species_turnover_data |> 
       filter(turnover24 == 1) |> 
-      select(summit:species))
+      select(summit:species)) |> 
+  mutate(hovedtype = str_extract(type, "[^C]*")) |> 
+  relocate(hovedtype, .before = type)
 
+colonizers_hovedtype_data <- colonizers_data |> 
+  summarise(.by = c(summit, hovedtype, cover), 
+            new_species = n()) |> 
+  left_join(filefjell_2024_clean |> summarise(.by = c(summit, hovedtype), total_species = n())) |> 
+  mutate(hovedtype = as.factor(hovedtype), 
+         new_area = new_species / cover, 
+         ratio_species = (new_species / total_species) * 0.999 + 0.0005)
 
 # community_order <- community_data |> 
 #   select(-c(height, no_species)) |> 
@@ -113,49 +159,118 @@ colonizers_data <- filefjell_2024_data |>
 
 
 
-# Distance change----
+# Altitude change----
 
-distance_change_data |> 
-  ggplot(aes(x = interval, y = distance_change_rate)) +
+altitude_change_data |> 
+  ggplot(aes(x = period, y = altitude_change_rate)) +
   geom_violin() + 
-  labs(title = " Distances by Year",
+  labs(title = "Change in altitudes by Year",
        x = "Year",
-       y = "Vertical Distance to Top (meters)") +
+       y = "Vertical altitude to Top (meters)") +
   theme_minimal()
 
-distance_change_data |> 
-  ggplot(aes(x = summit:interval, y = distance_change_rate, color = summit)) +
+altitude_change_data |> 
+  ggplot(aes(x = summit:period, y = altitude_change_rate, color = summit)) +
   geom_boxplot() +
-  labs(title = "Line Plot of Vertical Distances for Each Species Across Years",
+  labs(title = "Line Plot of Vertical altitudes for Each Species Across Years",
        x = "Year",
-       y = "Vertical Distance to Top (meters)") +
+       y = "Vertical altitude to Top (meters)") +
   theme_minimal() +
   theme(legend.position = "none")
 
-distance_change_data |> 
-  ggplot(aes(x = interval, y = distance_change_rate, color = species, group = species)) + 
+altitude_change_data |> 
+  ggplot(aes(x = period, y = altitude_change_rate, color = species, group = species)) + 
   facet_wrap(~summit) + 
   geom_line() +
-  labs(title = "Scatter Plot of Vertical Distances by Year for Each Mountain",
+  labs(title = "Scatter Plot of Vertical altitudes by Year for Each Mountain",
        x = "Year",
-       y = "Vertical Distance to Top (meters)") +
+       y = "Vertical altitude to Top (meters)") +
   theme_minimal() +
   theme(legend.position = "none")
 
 
-## Modelling change
+## Modelling
 
-hist(distance_change_data$distance_change_rate)
+hist(altitude_change_data$altitude_change_rate)
 
-distance_change_rate_mod <- glmmTMB(
-  distance_change_rate ~ 
-    interval + (1 | summit) + (1 | species), 
+altitude_change_rate_mod <- glmmTMB(
+  altitude_change_rate ~ 
+    period + (1 | summit) + (1 | species), 
   family = gaussian, 
-  data = distance_change_data)
+  data = altitude_change_data)
 
-# distance_change_mod |> model_diagnosis()
-# distance_change_mod |> model_homoscedasticity()
-distance_change_rate_mod |> summary()
+# altitude_change_mod |> model_diagnosis()
+# altitude_change_mod |> model_homoscedasticity()
+altitude_change_rate_mod |> summary()
+
+altitude_results <- altitude_change_rate_mod |> 
+  ggpredict(terms = "period") |> 
+  rename(period = x) |> 
+  as.data.frame() |> 
+  mutate(model = "altitude") |> 
+  relocate(model)
+
+
+## Only species found all three years
+
+hist(altitude_change_three_data$altitude_change_rate)
+
+altitude_change_three_rate_mod <- glmmTMB(
+  altitude_change_rate ~ 
+    period + (1 | summit) + (1 | species), 
+  family = gaussian, 
+  data = altitude_change_three_data)
+
+# altitude_change_three_rate_mod |> model_diagnosis()
+# altitude_change_three_rate_mod |> model_homoscedasticity()
+altitude_change_three_rate_mod |> summary()
+
+altitude_three_results <- altitude_change_three_rate_mod |> 
+  ggpredict(terms = "period") |> 
+  rename(period = x) |> 
+  as.data.frame() |> 
+  mutate(model = "altitude") |> 
+  relocate(model)
+
+test_altitude_three <- altitude_change_three_data |> 
+  mutate(period = factor(period, level = c("per2", "per1")))
+test_altitude_three_mod <- glmmTMB(
+  altitude_change_rate ~ 
+    period + (1 | summit) + (1 | species), 
+  family = gaussian, 
+  data = test_altitude_three)
+test_altitude_three_mod |> summary()
+
+
+## Species found either in 1972 and 2009, or 2009 and 2024
+
+hist(altitude_change_two_data$altitude_change_rate)
+
+altitude_change_two_rate_mod <- glmmTMB(
+  altitude_change_rate ~ 
+    period + (1 | summit) + (1 | species), 
+  family = gaussian, 
+  data = altitude_change_two_data)
+
+# altitude_change_two_rate_mod |> model_diagnosis()
+# altitude_change_two_rate_mod |> model_homoscedasticity()
+altitude_change_two_rate_mod |> summary()
+
+altitude_two_results <- altitude_change_two_rate_mod |> 
+  ggpredict(terms = "period") |> 
+  rename(period = x) |> 
+  as.data.frame() |> 
+  mutate(model = "altitude") |> 
+  relocate(model)
+
+test_altitude_two <- altitude_change_two_data |> 
+  mutate(period = factor(period, level = c("per2", "per1")))
+test_altitude_two_mod <- glmmTMB(
+  altitude_change_rate ~ 
+    period + (1 | summit) + (1 | species), 
+  family = gaussian, 
+  data = test_altitude_two)
+test_altitude_two_mod |> summary()
 
 
 
@@ -165,15 +280,15 @@ distance_change_rate_mod |> summary()
 ## Exploratoy graphs
 
 richness_change_data |> 
-  ggplot(aes(x = interval, y = richness_change_rate)) +
+  ggplot(aes(x = period, y = richness_change_rate)) +
   geom_violin() + 
-  labs(title = " Distances by Year",
+  labs(title = " altitudes by Year",
        x = "Year",
-       y = "Vertical Distance to Top (meters)") +
+       y = "Vertical altitude to Top (meters)") +
   theme_minimal()
 
 richness_change_data |> 
-  ggplot(aes(x = summit:interval, y = richness_change_rate, color = summit)) +
+  ggplot(aes(x = summit:period, y = richness_change_rate, color = summit)) +
   geom_point() +
   labs(title = "Plot of richness change per year",
        x = "Year",
@@ -181,19 +296,28 @@ richness_change_data |>
   theme_minimal() +
   theme(legend.position = "none")
 
-# Some summits gained species at a faster rate, some at a slower, and some lost species in the second interval
+# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
 
 
 ## Modelling
 
+hist(richness_change_data$richness_change_rate)
+
 richness_change_rate_mod <- glmmTMB(
   richness_change_rate ~ 
-    interval + (1 | summit), 
+    period + (1 | summit), 
   family = gaussian, 
   data = richness_change_data)
 
 richness_change_rate_mod |> model_diagnosis()
 richness_change_rate_mod |> summary()
+
+richness_results <- richness_change_rate_mod |> 
+  ggpredict(terms = "period") |> 
+  rename(period = x) |> 
+  as.data.frame() |> 
+  mutate(model = "richness") |> 
+  relocate(model)
 
 
 
@@ -201,63 +325,87 @@ richness_change_rate_mod |> summary()
 # Turnover----
 
 turnover_data |> 
-  summarise(.by = interval,
-            lost_mean = mean(lost), 
-            nochange_mean = mean(nochange), 
-            new_mean = mean(new))
+  summarise(.by = period, 
+            new_mean = mean(new), 
+            nochange_mean = mean(nochange),
+            lost_mean = mean(lost))
 
 turnover_data |> 
-  summarise(.by = interval,
-            lost_mean = mean(lost_rate), 
-            new_mean = mean(new_rate))
+  summarise(.by = period, 
+            new_mean = mean(new_rate),
+            lost_mean = mean(lost_rate))
 
 # I don't analyse or plot nochange. One being greater than the other is just a measure of richness, not of change
+
+# New species
+
+turnover_data |> 
+  ggplot(aes(x = period, y = new_rate)) + 
+  geom_violin()
+
+new_rate_mod <- glmmTMB(
+  new_rate*555 ~ 
+    period + (1 | summit), 
+  family = nbinom2, 
+  data = turnover_data)
+
+new_rate_mod |> model_diagnosis()
+new_rate_mod |> summary()
+
+new_results <- new_rate_mod |> 
+  ggpredict(terms = "period") |> 
+  rename(period = x) |> 
+  as.data.frame() |> 
+  mutate(predicted = predicted/555, 
+         conf.low = conf.low/555, 
+         conf.high = conf.high/555) |> 
+  mutate(model = "new") |> 
+  relocate(model)
+
+# More new species in the second period, but not significantly
+
 
 
 # Lost species
 
 turnover_data |> 
-  ggplot(aes(x = interval, y = lost_rate)) + 
+  ggplot(aes(x = period, y = lost_rate)) + 
   geom_violin()
 
+hist(turnover_data$lost_rate*555)
+
 lost_rate_mod <- glmmTMB(
-  lost_rate ~ 
-    interval + (1 | summit), 
-  family = gaussian, 
+  lost_rate*555 ~ 
+    period + (1 | summit), 
+  family = nbinom2, 
+  ziformula = ~1, 
   data = turnover_data)
 
 lost_rate_mod |> model_diagnosis()
 lost_rate_mod |> summary()
 # Greater species loss in the second period
 
-
-# New species
-
-turnover_data |> 
-  ggplot(aes(x = interval, y = new_rate)) + 
-  geom_violin()
-
-new_rate_mod <- glmmTMB(
-  new_rate ~ 
-    interval + (1 | summit), 
-  family = gaussian, 
-  data = turnover_data)
-
-new_rate_mod |> model_diagnosis()
-new_rate_mod |> summary()
-
-# Fewer new species in the second period, but not significantly
+lost_results <- lost_rate_mod |> 
+  ggpredict(terms = "period") |> 
+  rename(period = x) |> 
+  as.data.frame() |> 
+  mutate(predicted = predicted/555, 
+         conf.low = conf.low/555, 
+         conf.high = conf.high/555) |> 
+  mutate(model = "lost") |> 
+  relocate(model)
 
 
-turnover_raw_graph <- turnover |> 
-  select(summit, interval, lost_rate, new_rate) |> 
+
+turnover_raw_graph <- turnover_data |> 
+  select(summit, period, lost_rate, new_rate) |> 
   pivot_longer(cols = c(lost_rate, new_rate), names_to = "species_change", values_to = "change") |> 
-  ggplot(aes(x = interval, y = change, fill = interval)) + 
+  ggplot(aes(x = period, y = change, fill = period)) + 
   geom_violin() + 
   stat_summary(fun.data = "mean_cl_boot", geom = "pointrange", colour = "white") + 
   facet_grid(cols = vars(species_change), labeller = adj_label) + 
-  scale_fill_manual("Interval", values = c("int1" = "#859395", "int2" = "#f58800"), labels = c("1972-2009", "2009-2024")) + 
-  labs(x = "Interval", y = "Species / Year") + 
+  scale_fill_manual("period", values = c("per1" = "#859395", "per2" = "#f58800"), labels = c("1972-2009", "2009-2024")) + 
+  labs(x = "period", y = "Species / Year") + 
   theme_bw() + 
   theme(text = element_text(size = 20, family = "serif"), 
         axis.title.x = element_blank(), 
@@ -266,31 +414,131 @@ turnover_raw_graph <- turnover |>
         axis.title.y = element_text(margin = margin(r = 5)), 
         legend.position = "top", 
         legend.title = element_text(margin = margin(r = 30)), 
-        legend.text = element_text(margin = margin(l = 09, r = 20)))
+        legend.text = element_text(margin = margin(l = 9, r = 20)))
 turnover_raw_graph
 turnover_raw_graph |> ggsave(file = "Graphs/Turnover.jpeg")
 
 
 
 
+# Results----
+
+results_table <- altitude_results |> 
+  rbind(richness_results) |> 
+  rbind(new_results) |> 
+  rbind(lost_results) |> 
+  mutate(model = factor(model, levels = c("altitude", "richness", "new", "lost")))
+
+facet_labels <- data.frame(model = unique(results_table$model), label = letters[1:4], x = -0.2, y = 1.5)
+
+results_graph <- results_table |> 
+  mutate(period = factor(period, levels = c("per2", "per1"))) |> 
+  ggplot(aes(x = predicted, y = period, colour = period)) + 
+  theme_minimal() + 
+  facet_grid(rows = vars(model), switch = "y", labeller = adj_label) + 
+  geom_vline(xintercept = 0, colour = "black") +
+  geom_vline(xintercept = c(-0.2, 0.2, 0.4, 0.6, 0.8), colour = "lightgrey") + 
+  geom_point(size = 3) + 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.3) + 
+  scale_x_continuous(limits = c(-0.2, 0.92), breaks = c(0.0, 0.4, 0.8)) + 
+  scale_colour_manual("Period", values = colour_mapping$period, labels = adj_label) + 
+  guides(colour = guide_legend(reverse = TRUE)) + 
+  labs(x = "Rate") + 
+  theme(panel.spacing.y = unit(2, "lines"), 
+        text = element_text(size = 16, family = "serif"), 
+        axis.title.x = element_text(hjust = 0.535), 
+        axis.text.x = element_text(margin = margin(t = 10, b = 10)), 
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 0), 
+        axis.title.y = element_blank(), 
+        axis.text.y = element_blank(), 
+        panel.grid.major.y = element_blank(),
+        legend.position = "top", 
+        legend.box.margin = margin(l = 85), 
+        legend.title = element_text(margin = margin(b = 5, r = 40)), 
+        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
+results_graph
+results_graph |> ggsave(file = "Graphs/Results.jpeg", width = 20, height = 15, units = "cm")
+
+
+
+
 # Colonizers. When doing this analysis consider whether species present in 1972 (that disappeared in 2010) should be taken into account ----
 
-## Exploratoy graphs
+## Total
 
-colonizers_data |> 
-  summarise(.by = c(type), colonizers = n()) |> 
-  ggplot(aes(x = type, y = colonizers)) +
-  geom_col() + 
-  labs(title = " Distances by Year",
+colonizers_hovedtype_data |> 
+  ggplot(aes(x = hovedtype, y = new_species)) +
+  geom_boxplot() + 
+  labs(title = " New species by hovedtype",
        x = "Year",
-       y = "Vertical Distance to Top (meters)") +
+       y = "New species") +
   theme_minimal()
 
+colonizers_hovedtype_mod <- glmmTMB(
+  new_species ~ 
+    hovedtype + (1 | summit), 
+  family = poisson, 
+  data = colonizers_hovedtype_data
+)
+colonizers_hovedtype_mod |> model_diagnosis()
+colonizers_hovedtype_mod |> summary()
+
+
+## Ratio
+
+colonizers_hovedtype_data |> 
+  ggplot(aes(x = hovedtype, y = ratio_species)) +
+  geom_boxplot() + 
+  labs(title = " New species by hovedtype",
+       x = "Year",
+       y = "New species") +
+  theme_minimal()
+
+colonizers_hovedtype_ratio_mod <- glmmTMB(
+  ratio_species ~ 
+    hovedtype + (1 | summit), 
+  family = beta_family, 
+  data = colonizers_hovedtype_data
+)
+colonizers_hovedtype_ratio_mod |> model_diagnosis()
+colonizers_hovedtype_ratio_mod |> summary()
+
+hovedtype_ratio_results <- colonizers_hovedtype_ratio_mod |> 
+  ggpredict(terms = "hovedtype") |> 
+  rename(hovedtype = x) |> 
+  as.data.frame() |> 
+  mutate(model = "ratio_species") |> 
+  relocate(model)
 
 
 
+## By area
 
+colonizers_hovedtype_data |> 
+  filter(!is.na(new_area)) |> 
+  ggplot(aes(x = hovedtype, y = new_area)) +
+  geom_boxplot() + 
+  labs(title = " New species ratio by hovedtype",
+       x = "Year",
+       y = "New species ratio") +
+  theme_minimal()
+hist(colonizers_hovedtype_data$new_area)
 
+colonizers_hovedtype_area_mod <- glmmTMB(
+  new_area ~ 
+    hovedtype + (1 | summit), 
+  family = Gamma, 
+  data = colonizers_hovedtype_data
+)
+colonizers_hovedtype_area_mod |> model_diagnosis()
+colonizers_hovedtype_area_mod |> summary()
+
+hovedtype_area_results <- colonizers_hovedtype_area_mod |> 
+  ggpredict(terms = "hovedtype") |> 
+  rename(hovedtype = x) |> 
+  as.data.frame() |> 
+  mutate(model = "ratio_species") |> 
+  relocate(model)
 
 
 
@@ -336,6 +584,5 @@ community_presence_species |>
   ggplot() + 
   geom_text(aes(x = NMDS1, y = NMDS2, label = species), size = 5) + 
   theme_bw()
-
 
 
