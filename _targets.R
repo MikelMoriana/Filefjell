@@ -15,7 +15,7 @@ tar_option_set(
 # R scripts in the R/ folder with custom functions:
 tar_source("functions.R")
 
-# List of targets:
+# List of targets:----
 list(
   # Data cleaning----
   tar_target(
@@ -46,6 +46,15 @@ list(
     command = read_csv(filefjell_summit_data_file)
   ), 
   tar_target(
+    name = filefjell_cover_file, 
+    command = "Raw_data/Type_cover.csv", 
+    format = "file"
+  ), 
+  tar_target(
+    name = filefjell_cover, 
+    command = read_csv2(filefjell_cover_file)
+  ), 
+  tar_target(
     name = filefjell_1972_2009_tidy, 
     command = filefjell_1972_2009 |> 
       relocate(Year) |> 
@@ -68,13 +77,33 @@ list(
       rename(elevation = top_height) |> 
       mutate(distance = elevation - altitude) |> 
       select(-altitude) |> 
-      relocate(distance, .after = species)
+      relocate(distance, .after = species) |> 
+      mutate(hovedtype = str_extract(type, "[^C]*")) |> 
+      relocate(hovedtype, .before = type)
   ), 
   tar_target(
     name = filefjell_summit_data_tidy, 
     command = filefjell_summit_data |> 
       clean_names() |> 
       mutate(summit = str_replace_all(summit, " ", "_"))
+  ), 
+  tar_target(
+    name = filefjell_cover_tidy,
+    command = filefjell_cover |> 
+      clean_names() |> 
+      relocate(year) |> 
+      mutate(date = dmy(date), 
+             recorder = str_replace_all(recorder, " \\+ ", "_"), 
+             type = ifelse(type == "Naken berg", "T1", type)) |> 
+      rename(cover = percentage)
+  ), 
+  tar_target(
+    name = filefjell_hovedtype_cover, 
+    command = filefjell_cover_tidy |> 
+      mutate(hovedtype = str_extract(type, "[^C]*")) |> 
+      relocate(hovedtype, .before = type) |> 
+      summarise(.by = c(year, summit,date, recorder, hovedtype), 
+                cover = sum(cover))
   ), 
   tar_target(
     name = filefjell_1972_2009_clean, 
@@ -97,45 +126,52 @@ list(
       rename(elevation = elevation_correct) |> 
       relocate(elevation, .after = summit) |> 
       mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
-                                 TRUE ~ species))
+                                 TRUE ~ species)) |> 
+      left_join(filefjell_hovedtype_cover |> select(summit, hovedtype, cover), by = c("summit", "hovedtype")) |> 
+      relocate(cover, .after = type)
   ), 
   tar_target(
     name = filefjell_data_clean, 
     command = filefjell_1972_2009_clean |> 
       rbind(filefjell_2024_clean |> select(year, summit, elevation, species, distance)) |> 
-      arrange(desc(elevation), year, species)
+      arrange(desc(elevation), year, species) |> 
+      mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
   ), 
   # Distance to top----
   tar_target(
     name = distance_change_data,
     command = filefjell_data_clean |> 
+      filter(summit != "Krekanosi_S") |> # TO REMOVE WHEN WE GET DATA FROM KREKANOSI S
       pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-      mutate(int1 = case_when(is.na(y2009) ~ NA, 
+      mutate(per1 = case_when(is.na(y2009) ~ NA, 
                               !is.na(y2009) & is.na(y1972) ~ y2009 - 33, 
                               !is.na(y2009) & !is.na(y1972) ~ y2009 - y1972), 
-             int2 = case_when(is.na(y2024) ~ NA, 
+             per2 = case_when(is.na(y2024) ~ NA, 
                               !is.na(y2024) & is.na(y2009) ~ y2024 - 33, 
                               !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009)) |> 
-      select(-c(y1972, y2009, y2024)) |>
-      pivot_longer(cols =c("int1", "int2"), names_to = "interval", values_to = "distance_change") |> 
-      mutate(distance_change_rate = case_when(interval == "int1" ~ distance_change / 37, 
-                                              interval == "int2" ~ distance_change / 15)) |> 
-      filter(!is.na(distance_change)) |> 
-      mutate(interval = as.factor(interval)) |> 
-      arrange(summit, species, interval)
+      select(-c(y1972, y2009, y2024)) |> 
+      pivot_longer(cols =c("per1", "per2"), names_to = "period", values_to = "distance_change") |> 
+      mutate(altitude_change = distance_change * -1) |> 
+      select(-distance_change) |> 
+      mutate(altitude_change_rate = case_when(period == "per1" ~ altitude_change / 37, 
+                                              period == "per2" ~ altitude_change / 15)) |> 
+      filter(!is.na(altitude_change)) |> 
+      mutate(period = as.factor(period)) |> 
+      arrange(summit, species, period)
   ),
   tar_target(
     name = distance_change_rate_mod,
     command = glmmTMB(
-      distance_change_rate ~
-        interval + (1 | summit) + (1 | species),
-      family = gaussian,
-      data = distance_change_data)
+      altitude_change_rate ~ 
+        period + (1 | summit) + (1 | species), 
+      family = gaussian, 
+      data = altitude_change_data)
   ),
   # Richness----
   tar_target(
     name = richness_data,
-    command = filefjell_data_clean |>
+    command = filefjell_data_clean |> 
+      filter(summit != "Krekanosi_S") |> # TO REMOVE WHEN WE GET DATA FROM KREKANOSI S
       summarise(.by = c(year, summit, elevation),
                 richness = n())
   ), 
@@ -143,66 +179,69 @@ list(
     name = richness_change_data, 
     command = richness_data |> 
       pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |> 
-      mutate(int1 = y2009 - y1972, 
-             int2 = y2024 - y2009) |> 
+      mutate(per1 = y2009 - y1972, 
+             per2 = y2024 - y2009) |> 
       select(-c(y1972, y2009, y2024)) |> 
-      pivot_longer(cols = c(int1, int2), names_to = "interval", values_to = "richness_change") |> 
-      mutate(richness_change_rate = case_when(interval == "int1" ~ richness_change / 37, 
-                                              interval == "int2" ~ richness_change / 15)) |> 
-      mutate(interval = as.factor(interval))
+      pivot_longer(cols = c(per1, per2), names_to = "period", values_to = "richness_change") |> 
+      mutate(richness_change_rate = case_when(period == "per1" ~ richness_change / 37, 
+                                              period == "per2" ~ richness_change / 15)) |> 
+      mutate(period = as.factor(period))
   ), 
   tar_target(
     name = richness_change_rate_mod, 
     command = glmmTMB(
       richness_change_rate ~ 
-        interval + (1 | summit), 
+        period + (1 | summit), 
       family = gaussian, 
       data = richness_change_data)
   ),
   # Turnover----
   tar_target(
     name = species_turnover_data,
-    command = filefjell_data_clean |>
-      mutate(presence = ifelse(!is.na(distance), 1, 0)) |>
-      select(-distance) |>
-      arrange(species) |>
-      pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |>
-      arrange(summit, species) |>
-      mutate(turnover09 = y2009 - y1972) |>
+    command = filefjell_data_clean |> 
+      filter(summit != "Krekanosi_S") |> # TO REMOVE WHEN WE GET DATA FROM KREKANOSI S
+      mutate(presence = ifelse(!is.na(distance), 1, 0)) |> 
+      select(-distance) |> 
+      arrange(species) |> 
+      pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |> 
+      arrange(summit, species) |> 
+      mutate(turnover09 = y2009 - y1972) |> 
       mutate(turnover24 = y2024 - y2009)
     ),
   tar_target(
     name = turnover_data,
-    command = species_turnover_data |>
-      summarise(.by = summit,
-                int1_lost = sum(turnover09 == -1),
-                int1_nochange = sum(turnover09 == 0),
-                int1_new = sum(turnover09 == 1),
-                int2_lost = sum(turnover24 == -1),
-                int2_nochange = sum(turnover24 == 0),
-                int2_new = sum(turnover24 == 1)) |>
-      pivot_longer(cols = starts_with("int"),
-                   names_to = c("interval", ".value"),
-                   names_sep = "_") |>
-      mutate(number_years = ifelse(interval == "int1", 37, 15)) |>
-      mutate(lost_rate = lost / number_years,
-             new_rate = new / number_years)
-  ),
-  tar_target(
-    name = lost_rate_mod, 
-    command = glmmTMB(
-      lost_rate ~ 
-        interval + (1 | summit), 
-      family = gaussian, 
-      data = turnover_data)
+    command = species_turnover_data |> 
+      summarise(.by = summit, 
+                per1_lost = sum(turnover09 == -1), 
+                per1_nochange = sum(turnover09 == 0), 
+                per1_new = sum(turnover09 == 1), 
+                per2_lost = sum(turnover24 == -1), 
+                per2_nochange = sum(turnover24 == 0), 
+                per2_new = sum(turnover24 == 1)) |> 
+      pivot_longer(cols = starts_with("per"), 
+                   names_to = c("period", ".value"), 
+                   names_sep = "_") |> 
+      mutate(number_years = ifelse(period == "per1", 37, 15)) |> 
+      mutate(lost_rate = lost / number_years, 
+             new_rate = new / number_years) |> 
+      mutate(period = as.factor(period))
   ),
   tar_target(
     name = new_rate_mod, 
     command = glmmTMB(
-        new_rate ~ 
-          interval + (1 | summit), 
-        family = gaussian, 
-        data = turnover_data)
+      new_rate*555 ~ 
+        period + (1 | summit), 
+      family = nbinom2, 
+      data = turnover_data)
+  ),
+  tar_target(
+    name = lost_rate_mod, 
+    command = glmmTMB(
+      lost_rate*555 ~ 
+        period + (1 | summit), 
+      family = nbinom2, 
+      ziformula = ~1, 
+      data = turnover_data)
   ),
   # New species per nature type
   tar_target(
@@ -211,6 +250,8 @@ list(
       semi_join(
         species_turnover_data |>
           filter(turnover24 == 1) |>
-          select(summit:species))
+          select(summit:species)) |> 
+      mutate(hovedtype = str_sub(type, start = 1L, end = 2L)) |> 
+      relocate(hovedtype, .before = type)
   )
 )
