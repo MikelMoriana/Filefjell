@@ -3,16 +3,20 @@
 library(tidyverse)
 library(janitor)
 
+conflicted::conflicts_prefer(
+  dplyr::filter()
+)
+
 filefjell_1972_2009 <- read_csv2("Raw_data/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("Raw_data/Filefjell_2024.csv")
 filefjell_summit_data <- read_csv("Raw_data/Summit_data.csv")
-filefjell_cover <- read_csv2("Raw_data/Type_cover.csv")
+filefjell_type_cover <- read_csv2("Raw_data/Type_cover.csv")
 
 
 
 # Tidying the data----
 
-# We tidy and make the 1972 and 2009 data long
+# We tidy and make the 1972_2009 data long
 
 filefjell_1972_2009_tidy <- filefjell_1972_2009 |> 
   relocate(Year) |> 
@@ -30,14 +34,15 @@ filefjell_2024_tidy <- filefjell_2024 |>
   relocate(year) |> 
   rename(summit = top) |> 
   mutate(date = dmy(date)) |> 
-  mutate(vaer = str_replace_all(vaer, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))) |> 
+  rename(weather = vaer) |> 
+  mutate(weather = str_replace_all(weather, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))) |> 
   mutate(recorder = str_replace_all(recorder, " \\+ ", "_")) |> 
   rename(elevation = top_height) |> 
   mutate(distance = elevation - altitude) |> 
   select(-altitude) |> 
   relocate(distance, .after = species) |> 
-  mutate(hovedtype = str_extract(type, "[^C]*")) |> 
-  relocate(hovedtype, .before = type)
+  mutate(main_type = str_extract(type, "[^C]*")) |> 
+  relocate(main_type, .before = type)
 
 # We tidy the summit data
 
@@ -45,9 +50,9 @@ filefjell_summit_data_tidy <- filefjell_summit_data |>
   clean_names() |> 
   mutate(summit = str_replace_all(summit, " ", "_"))
 
-# We tidy the cover data
+# We tidy the type data
 
-filefjell_cover_tidy <- filefjell_cover |> 
+filefjell_type_cover_tidy <- filefjell_type_cover |> 
   clean_names() |> 
   relocate(year) |> 
   mutate(date = dmy(date), 
@@ -55,10 +60,10 @@ filefjell_cover_tidy <- filefjell_cover |>
          type = ifelse(type == "Naken berg", "T1", type)) |> 
   rename(cover = percentage)
 
-filefjell_hovedtype_cover <- filefjell_cover_tidy |> 
-  mutate(hovedtype = str_extract(type, "[^C]*")) |> 
-  relocate(hovedtype, .before = type) |> 
-  summarise(.by = c(year, summit,date, recorder, hovedtype), 
+filefjell_main_type_cover <- filefjell_type_cover_tidy |> 
+  mutate(main_type = str_extract(type, "[^C]*")) |> 
+  relocate(main_type, .before = type) |> 
+  summarise(.by = c(year, summit,date, recorder, main_type), 
             cover = sum(cover))
 
 
@@ -89,6 +94,9 @@ filefjell_tidy_new <- filefjell_2024_tidy |>
               select(species) |> 
               arrange(species) |> 
               distinct())
+
+filefjell_tidy_lost
+filefjell_tidy_new
 # In 2009 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 as well
 # In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan
 # In 2009 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri
@@ -117,7 +125,7 @@ filefjell_2024_clean <- filefjell_2024_tidy |>
   relocate(elevation, .after = summit) |> 
   mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
                              TRUE ~ species)) |> 
-  left_join(filefjell_hovedtype_cover |> select(summit, hovedtype, cover), by = c("summit", "hovedtype")) |> 
+  left_join(filefjell_main_type_cover |> select(summit, main_type, cover), by = c("summit", "main_type")) |> 
   relocate(cover, .after = type)
 
 filefjell_clean_lost <- 
@@ -139,6 +147,9 @@ filefjell_clean_new <-
               select(species) |> 
               arrange(species) |> 
               distinct())
+
+filefjell_clean_lost
+filefjell_clean_new
 
 
 filefjell_data_clean <- filefjell_1972_2009_clean |> 
