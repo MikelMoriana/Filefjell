@@ -9,8 +9,10 @@ conflicted::conflicts_prefer(
 
 filefjell_1972_2009 <- read_csv2("Raw_data/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("Raw_data/Filefjell_2024.csv")
-filefjell_summit_data <- read_csv("Raw_data/Summit_data.csv")
+filefjell_2025 <- read_csv2("Raw_data/Filefjell_2025.csv")
+filefjell_summit_data <- read_csv2("Raw_data/Summit_data.csv")
 filefjell_type_cover <- read_csv2("Raw_data/Type_cover.csv")
+filefjell_dahlr <- read_csv2("Raw_data/DahlR_values.csv")
 
 
 
