@@ -21,13 +21,13 @@ filefjell_dahlr <- read_csv2("Raw_data/DahlR_values.csv")
 # We tidy and make the 1972_2009 data long
 
 filefjell_1972_2009_tidy <- filefjell_1972_2009 |> 
-  relocate(Year) |> 
-  mutate(Summit = str_replace_all(Summit, " ", "_")) |> 
-  rename(Elevation = Height) |> 
-  pivot_longer(cols = -c(Year:Elevation), names_to = "species", values_to = "distance") |> 
   clean_names() |> 
-  mutate(species = str_replace_all(species, c(" " = "_", "\\." = ""))) |> 
-  filter(!is.na(distance))
+  relocate(year) |> 
+  mutate(summit = str_replace_all(summit, " ", "_")) |> 
+  rename(elevation = height) |> 
+  pivot_longer(cols = -c(year:elevation), names_to = "species", values_to = "distance") |> 
+  filter(!is.na(distance)) |> 
+  arrange(summit, year, species)
 
 # We tidy the 2024 data and calculate distance to summit
 
