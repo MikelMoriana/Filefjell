@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+# Files in the root folder
+
+# Folders in the root folder
+_targets/
+data_clean/
+data_raw/
+Graphs/
+Manuscript/
+Scripts/Helenes_poster.R
+Scripts/Other_analyses.R
