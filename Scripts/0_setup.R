@@ -1,8 +1,22 @@
 # Libraries----
 
-library(tidyverse)
-library(glmmTMB)
-library(DHARMa)
+# Loading the libraries and installing them if not in the Rproj
+
+local({
+  pkgs <- c("tidyverse", "glmmTMB", "DHARMa", "conflicted")
+  missing <- setdiff(pkgs, rownames(installed.packages()))
+  if (length(missing)) install.packages(missing)
+  for (pkg in pkgs) {
+    library(pkg, character.only = TRUE)
+  }
+})
+
+conflicts_prefer(
+  dplyr::filter,
+  dplyr::lag
+)
+
+options(scipen = 999)
 
 
 # Plotting----
