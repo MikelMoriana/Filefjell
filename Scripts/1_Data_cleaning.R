@@ -2,9 +2,6 @@
 
 source("Scripts/0_setup.R")
 
-library(tidyverse)
-library(janitor)
-
 
 
 # Data----
@@ -44,7 +41,7 @@ filefjell_2024_tidy <- filefjell_2024 |>
          recorder = str_replace_all(recorder, " \\+ ", "_")) |> 
   rename(elevation = top_height) |> 
   mutate(distance = elevation - altitude) |> 
-  select(-altitude) |> 
+  select(!altitude) |> 
   relocate(distance, .after = species) |> 
   mutate(main_type = str_extract(type, "[^C]*")) |> 
   relocate(main_type, .before = type) |> 
@@ -62,7 +59,7 @@ filefjell_2025_tidy <- filefjell_2025 |>
          recorder = str_replace_all(recorder, " \\+ ", "_")) |> 
   rename(elevation = top_height) |> 
   mutate(distance = elevation - altitude) |> 
-  select(-altitude) |> 
+  select(!altitude) |> 
   relocate(distance, .after = species) |> 
   mutate(main_type = str_extract(type, "[^C]*")) |> 
   relocate(main_type, .before = type) |> 
@@ -93,7 +90,7 @@ filefjell_type_cover_tidy <- filefjell_type_cover |>
          cover = percentage) |> 
   mutate(weather = str_replace_all(weather, c(" \\+ " = "_", ", " = "_", " " = "_")))
 
-filefjell_main_type_cover <- filefjell_type_cover_tidy |> 
+filefjell_maintype_cover_tidy <- filefjell_type_cover_tidy |> 
   mutate(main_type = str_extract(type, "[^C]*")) |> 
   relocate(main_type, .before = type) |> 
   summarise(.by = c(year, summit, date, recorder, main_type), 
