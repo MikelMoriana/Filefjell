@@ -13,46 +13,19 @@ tar_option_set(
 )
 
 # R scripts in the R/ folder with custom functions:
-tar_source("functions.R")
+tar_source("Scripts/0_setup.R")
 
 # List of targets:----
 list(
   # Data cleaning----
   tar_target(
     name = filefjell_1972_2009_file, 
-    command = "Raw_data/Filefjell_1972_2009.csv", 
+    command = "data_raw/Filefjell_1972_2009.csv", 
     format = "file"
   ), 
   tar_target(
     name = filefjell_1972_2009, 
     command = read_csv2(filefjell_1972_2009_file)
-  ), 
-  tar_target(
-    name = filefjell_2024_file, 
-    command = "Raw_data/Filefjell_2024.csv", 
-    format = "file"
-  ), 
-  tar_target(
-    name = filefjell_2024, 
-    command = read_csv2(filefjell_2024_file)
-  ), 
-  tar_target(
-    name = filefjell_summit_data_file, 
-    command = "Raw_data/Summit_data.csv", 
-    format = "file"
-  ), 
-  tar_target(
-    name = filefjell_summit_data, 
-    command = read_csv(filefjell_summit_data_file)
-  ), 
-  tar_target(
-    name = filefjell_type_cover_file, 
-    command = "Raw_data/Type_cover.csv", 
-    format = "file"
-  ), 
-  tar_target(
-    name = filefjell_type_cover, 
-    command = read_csv2(filefjell_type_cover_file)
   ), 
   tar_target(
     name = filefjell_1972_2009_tidy, 
@@ -64,6 +37,15 @@ list(
       clean_names() |> 
       mutate(species = str_replace_all(species, c(" " = "_", "\\." = ""))) |> 
       filter(!is.na(distance))
+  ), 
+  tar_target(
+    name = filefjell_2024_file, 
+    command = "data_raw/Filefjell_2024.csv", 
+    format = "file"
+  ), 
+  tar_target(
+    name = filefjell_2024, 
+    command = read_csv2(filefjell_2024_file)
   ), 
   tar_target(
     name = filefjell_2024_tidy, 
@@ -83,10 +65,28 @@ list(
       relocate(main_type, .before = type)
   ), 
   tar_target(
+    name = filefjell_summit_data_file, 
+    command = "data_raw/Summit_data.csv", 
+    format = "file"
+  ), 
+  tar_target(
+    name = filefjell_summit_data, 
+    command = read_csv(filefjell_summit_data_file)
+  ), 
+  tar_target(
     name = filefjell_summit_data_tidy, 
     command = filefjell_summit_data |> 
       clean_names() |> 
       mutate(summit = str_replace_all(summit, " ", "_"))
+  ), 
+  tar_target(
+    name = filefjell_type_cover_file, 
+    command = "data_raw/Type_cover.csv", 
+    format = "file"
+  ), 
+  tar_target(
+    name = filefjell_type_cover, 
+    command = read_csv2(filefjell_type_cover_file)
   ), 
   tar_target(
     name = filefjell_type_cover_tidy,
