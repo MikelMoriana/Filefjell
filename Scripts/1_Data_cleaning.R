@@ -1,11 +1,13 @@
-# Libraries and data----
+# Libraries----
+
+source("Scripts/0_setup.R")
 
 library(tidyverse)
 library(janitor)
 
-conflicted::conflicts_prefer(
-  dplyr::filter()
-)
+
+
+# Data----
 
 filefjell_1972_2009 <- read_csv2("Raw_data/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("Raw_data/Filefjell_2024.csv")
@@ -188,4 +190,4 @@ filefjell_data_clean <- filefjell_1972_2009_clean |>
   arrange(desc(elevation), year, species) |> 
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
 
-filefjell_data_clean |> write_xlsx("Clean_data/Filefjell_data_clean.csv")
+filefjell_data_clean |> write_csv("Clean_data/Filefjell_data_clean.csv")
