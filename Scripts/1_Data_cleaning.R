@@ -101,11 +101,11 @@ filefjell_maintype_cover_tidy <- filefjell_type_cover_tidy |>
 
 # We identify errors to correct. THINK AGAIN ABOUT HOW YOU DO THIS, AND WHAT SPECIES NAMES YOU USE, AND DAHL R VALUES. AND TARGETS----
 
-# Summits' elevations
+## Summits' elevations
 # There are some differences among years in the summits elevations. We use the values from Norgeskart
 
 
-# Species names
+## Species names
 
 filefjell_tidy_lost <- filefjell_1972_2009_tidy |> 
   select(species) |> 
@@ -126,36 +126,46 @@ filefjell_tidy_new <- filefjell_2024_2025_tidy |>
               distinct())
 
 filefjell_tidy_lost
+# Alc_glo, Arc_uva, Cer_lan, Ger_syl, Jun_trif, Luz_fri, Poa_x_jem, Sal_phy, Sil_acu, Sil_wah
 filefjell_tidy_new
-# In 2009 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 and 2025 as well
-# In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan
-# In 2009 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri
-# In 2009 Poa x jemtlandica was shortened to Poa x jem, while in 2024 it was shortened to Poa_jem
-# In 2009 Silene acaulis was shortened to Sil acu, while in 2024 it was shortened to Sil_aca
+# Agr_cap, Alc_sp, Cal_phr, Car_sax, Cer_alp_lan, Gen_niv, Jun_tri, Lyc_ann, Lyc_cla, Poa_jem, Sal_sp, Sil_aca, Vah_atr
 
+# In 2009 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 and 2025 as well
+# In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan. We use the former
+# In 2009 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri. We use the latter
+# In 2009 Poa x jemtlandica was shortened to Poa x jem, while in 2024 it was shortened to Poa_jem. We use the latter
+# Sal phy was found in Graveggi in 2009, but not in the resampling. An unidentified Salix was found in Unnamed in 2024. Could have been phy, but not sure. And it was a different summit quite far from the other anyways. We keep them as they are
+# In 2009 Silene acaulis was shortened to Sil acu, while in 2024 it was shortened to Sil_aca. We use the latter
+
+# 5 species have disappeared from the dataset: Arc uva, Ger syl, Luz fri, Sal phy and Sil wah
+# 8 species have appeared: Agr cap, Cal phr, Car sax, Gen niv, Lyc ann, Lyc cla, Vah atr and  Sal sp (maybe same as Sal phy, but in a different summit anyways)
 
 
 # We create the clean objects----
 
 filefjell_1972_2009_clean <- filefjell_1972_2009_tidy |> 
-  left_join(filefjell_summit_data_tidy |> select(summit, elevation), by = "summit", suffix = c("", "_correct")) |> 
+  left_join(filefjell_summit_data_tidy |> select(summit, elevation), 
+            by = "summit", 
+            suffix = c("", "_correct")) |> 
   select(!elevation) |> 
   rename(elevation = elevation_correct) |> 
   relocate(elevation, .after = summit) |> 
-  mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan", 
-                             species == "Jun_trif" ~ "Jun_tri", 
+  mutate(species = case_when(species == "Jun_trif" ~ "Jun_tri", 
                              species == "Poa_x_jem" ~ "Poa_jem", 
                              species == "Sil_acu" ~ "Sil_aca", 
                              TRUE ~ species))
 
 filefjell_2024_2025_clean <- filefjell_2024_2025_tidy |> 
-  left_join(filefjell_summit_data_tidy |> select(summit, elevation), by = "summit", suffix = c("", "_correct")) |> 
+  left_join(filefjell_summit_data_tidy |> select(summit, elevation), 
+            by = "summit", 
+            suffix = c("", "_correct")) |> 
   select(!elevation) |> 
   rename(elevation = elevation_correct) |> 
   relocate(elevation, .after = summit) |> 
   mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
+                             species == "Cer_alp_lan" ~ "Cer_lan", 
                              TRUE ~ species)) |> 
-  left_join(filefjell_main_type_cover |> select(summit, main_type, cover), by = c("summit", "main_type")) |> 
+  left_join(filefjell_maintype_cover_tidy |> select(summit, main_type, cover), by = c("summit", "main_type")) |> 
   relocate(cover, .after = type)
 
 filefjell_clean_lost <- 
@@ -187,4 +197,4 @@ filefjell_data_clean <- filefjell_1972_2009_clean |>
   arrange(desc(elevation), year, species) |> 
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
 
-filefjell_data_clean |> write_csv("Clean_data/Filefjell_data_clean.csv")
+filefjell_data_clean |> write_csv("data_clean/Filefjell_data_clean.csv")
