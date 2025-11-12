@@ -16,7 +16,7 @@ manual_positions <- tribble(
   # Functions
   
   
-  # Cleaning the files
+  # Tidy data
   "filefjell_1972_2009_file",         0,   -200,
   "filefjell_1972_2009",            200,   -200,
   "filefjell_1972_2009_tidy",       400,   -200,
@@ -26,18 +26,20 @@ manual_positions <- tribble(
   "filefjell_2025_file",              0,      0,
   "filefjell_2025",                 200,      0,
   "filefjell_2025_tidy",            400,      0,
+  "filefjell_2024_2025_tidy",       600,    -50,
   "filefjell_summit_data_file",       0,    100, 
   "filefjell_summit_data",          200,    100,
   "filefjell_summit_data_tidy",     400,    100,
   "filefjell_type_cover_file",        0,    200, 
   "filefjell_type_cover",           200,    200,
   "filefjell_type_cover_tidy",      400,    200,
-  "filefjell_maintype_cover_tidy",  600,    300
+  "filefjell_maintype_cover_tidy",  600,    200,
   
-  # "filefjell_1972_2009_clean",      -50,   -100,
-  # "filefjell_2024_clean",            50,   -100,
-  # # 5
-  # "filefjell_data_clean",             0,   -100,
+  # Clean data
+  "filefjell_1972_2009_clean",      800,    -67,
+  "filefjell_2024_2025_clean",      800,    100,
+  "filefjell_data_clean",          1000,      0
+  
   # # 6
   # "distance_change_data",          -100,   -100,
   # "richness_data",                    0,   -100,
