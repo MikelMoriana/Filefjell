@@ -176,10 +176,11 @@ list(
   ),
   tar_target(
     name = filefjell_data_clean,
-    command = filefjell_1972_2009_clean |>
-  rbind(filefjell_2024_2025_clean |> select(year, summit, elevation, species, distance)) |> 
-    arrange(desc(elevation), year, species) |> 
-    mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
+    command = filefjell_2024_2025_clean |> 
+      select(year, summit, elevation, species, distance) |> 
+      rbind(filefjell_1972_2009_clean) |> 
+      arrange(desc(elevation), year, species) |> 
+      mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
   )
   # # Elevation----
   # tar_target(

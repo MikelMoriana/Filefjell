@@ -99,7 +99,7 @@ filefjell_maintype_cover_tidy <- filefjell_type_cover_tidy |>
 
 
 
-# We identify errors to correct. THINK AGAIN ABOUT HOW YOU DO THIS, AND WHAT SPECIES NAMES YOU USE, AND DAHL R VALUES. AND TARGETS----
+# We identify errors to correct. THINK AGAIN ABOUT HOW YOU DO THIS, AND DAHL R VALUES----
 
 ## Summits' elevations
 # There are some differences among years in the summits elevations. We use the values from Norgeskart
@@ -192,8 +192,9 @@ filefjell_clean_lost
 filefjell_clean_new
 
 
-filefjell_data_clean <- filefjell_1972_2009_clean |> 
-  rbind(filefjell_2024_2025_clean |> select(year, summit, elevation, species, distance)) |> 
+filefjell_data_clean <- filefjell_2024_2025_clean |> 
+  select(year, summit, elevation, species, distance) |> 
+  rbind(filefjell_1972_2009_clean) |> 
   arrange(desc(elevation), year, species) |> 
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
 
