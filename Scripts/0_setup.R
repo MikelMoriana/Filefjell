@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("tidyverse", "janitor", "glmmTMB", "DHARMa", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "glmmTMB", "DHARMa", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
