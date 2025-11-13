@@ -7,6 +7,7 @@ source("Scripts/0_setup.R")
 # Data----
 
 filefjell_1972_2009 <- read_csv2("data_raw/Filefjell_1972_2009.csv")
+filefjell_visit_dates_2008_2009 <- read_csv2("data_raw/Filefjell_visit_dates_2008_2009.csv")
 filefjell_2024 <- read_csv2("data_raw/Filefjell_2024.csv")
 filefjell_2025 <- read_csv2("data_raw/Filefjell_2025.csv")
 filefjell_summit_data <- read_csv2("data_raw/Summit_data.csv")
@@ -17,53 +18,39 @@ filefjell_dahlr <- read_csv2("data_raw/DahlR_values.csv")
 
 # Tidying the data----
 
-# We tidy and make the 1972_2009 data long
+# We divide 1972and 2009 into two dataframes and tidy them
 
-filefjell_1972_2009_tidy <- filefjell_1972_2009 |> 
-  relocate(Year) |> 
-  mutate(Summit = str_replace_all(Summit, " ", "_")) |> 
-  rename(Elevation = Height) |> 
-  pivot_longer(cols = -c(Year:Elevation), names_to = "species", values_to = "distance") |> 
-  clean_names() |> 
-  mutate(species = str_replace_all(species, c(" " = "_", "\\." = ""))) |> 
-  filter(!is.na(distance)) |> 
-  arrange(desc(elevation), year, species)
+filefjell_1972_tidy <- filefjell_1972_2009 |> 
+  filter(Year == 1972) |> 
+  pivot_longer(cols = !c(Summit:Year), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+  data_tidying()
 
-# We tidy the 2024 data and calculate distance to summit
+filefjell_2009_tidy <- filefjell_1972_2009 |> 
+  filter(Year == 2009) |> 
+  left_join(filefjell_visit_dates_2008_2009, by = "Summit") |> 
+  mutate(Year = if_else(grepl("2008", Date), 2008, Year)) |> 
+  pivot_longer(cols = !c(Summit:Year, Date, Recorder), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+  data_tidying()
+
+# We tidy the 2024 data, calculate distance to summit and create column for main type
 
 filefjell_2024_tidy <- filefjell_2024 |> 
-  clean_names() |> 
-  relocate(year) |> 
-  rename(summit = top) |> 
-  mutate(date = dmy(date)) |> 
-  rename(weather = vaer) |> 
-  mutate(weather = str_replace_all(weather, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_")), 
-         recorder = str_replace_all(recorder, " \\+ ", "_")) |> 
-  rename(elevation = top_height) |> 
+  data_tidying() |> 
   mutate(distance = elevation - altitude) |> 
   select(!altitude) |> 
   relocate(distance, .after = species) |> 
   mutate(main_type = str_extract(type, "[^C]*")) |> 
-  relocate(main_type, .before = type) |> 
-  arrange(desc(elevation), species)
+  relocate(main_type, .before = type)
 
-# We tidy the 2025 data and calculate distance to summit
+# We tidy the 2025 data, calculate distance to summit and create column for main type
 
-filefjell_2025_tidy <- filefjell_2025 |> 
-  clean_names() |> 
-  relocate(year) |> 
-  rename(summit = top) |> 
-  mutate(date = dmy(date)) |> 
-  rename(weather = vaer) |> 
-  mutate(weather = str_replace_all(weather, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_")), 
-         recorder = str_replace_all(recorder, " \\+ ", "_")) |> 
-  rename(elevation = top_height) |> 
+filefjell_2025_tidy <- filefjell_2025 |> data_tidying() |> 
   mutate(distance = elevation - altitude) |> 
   select(!altitude) |> 
   relocate(distance, .after = species) |> 
   mutate(main_type = str_extract(type, "[^C]*")) |> 
-  relocate(main_type, .before = type) |> 
-  arrange(desc(elevation), species)
+  relocate(main_type, .before = type)
+
 
 # We combine 2024 and 2025 into one object
 
