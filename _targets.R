@@ -28,16 +28,29 @@ list(
     command = read_csv2(filefjell_1972_2009_file)
   ), 
   tar_target(
-    name = filefjell_1972_2009_tidy, 
+    name = filefjell_1972_tidy,
     command = filefjell_1972_2009 |> 
-      relocate(Year) |> 
-      mutate(Summit = str_replace_all(Summit, " ", "_")) |> 
-      rename(Elevation = Height) |> 
-      pivot_longer(cols = -c(Year:Elevation), names_to = "species", values_to = "distance") |> 
-      clean_names() |> 
-      mutate(species = str_replace_all(species, c(" " = "_", "\\." = ""))) |> 
-      filter(!is.na(distance)) |> 
-      arrange(desc(elevation), year, species)
+      filter(Year == 1972) |> 
+      pivot_longer(cols = !c(Summit:Year), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+      data_tidying()
+  ),
+  tar_target(
+    name = filefjell_visit_dates_2008_2009_file, 
+    command = "data_raw/Filefjell_visit_dates_2008_2009.csv", 
+    format = "file"
+  ), 
+  tar_target(
+    name = filefjell_1972_2009, 
+    command = read_csv2(filefjell_1972_2009_file)
+  ), 
+  tar_target(
+    name = filefjell_2009_tidy,
+    command = filefjell_1972_2009 |> 
+      filter(Year == 2009) |> 
+      left_join(filefjell_visit_dates_2008_2009, by = "Summit") |> 
+      mutate(Year = if_else(grepl("2008", Date), 2008, Year)) |> 
+      pivot_longer(cols = !c(Summit:Year, Date, Recorder), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+      data_tidying()
   ),
   tar_target(
     name = filefjell_2024_file,
