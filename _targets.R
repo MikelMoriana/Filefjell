@@ -35,13 +35,13 @@ list(
       data_tidying()
   ),
   tar_target(
-    name = filefjell_visit_dates_2008_2009_file, 
-    command = "data_raw/Filefjell_visit_dates_2008_2009.csv", 
+    name = filefjell_dates_2008_2009_file, 
+    command = "data_raw/Filefjell_dates_2008_2009.csv", 
     format = "file"
   ), 
   tar_target(
-    name = filefjell_visit_dates_2008_2009, 
-    command = read_csv2(filefjell_visit_dates_2008_2009_file)
+    name = filefjell_dates_2008_2009, 
+    command = read_csv2(filefjell_dates_2008_2009_file)
   ), 
   tar_target(
     name = filefjell_2009_tidy,
