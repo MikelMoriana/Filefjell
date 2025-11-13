@@ -40,8 +40,8 @@ list(
     format = "file"
   ), 
   tar_target(
-    name = filefjell_1972_2009, 
-    command = read_csv2(filefjell_1972_2009_file)
+    name = filefjell_visit_dates_2008_2009, 
+    command = read_csv2(filefjell_visit_dates_2008_2009_file)
   ), 
   tar_target(
     name = filefjell_2009_tidy,
