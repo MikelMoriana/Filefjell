@@ -17,26 +17,31 @@ manual_positions <- tribble(
   
   
   # Tidy data
-  "filefjell_1972_2009_file",         0,   -200,
-  "filefjell_1972_2009",            200,   -200,
-  "filefjell_1972_2009_tidy",       400,   -200,
-  "filefjell_2024_file",              0,   -100,
-  "filefjell_2024",                 200,   -100,
-  "filefjell_2024_tidy",            400,   -100,
-  "filefjell_2025_file",              0,      0,
-  "filefjell_2025",                 200,      0,
-  "filefjell_2025_tidy",            400,      0,
-  "filefjell_2024_2025_tidy",       600,    -50,
-  "filefjell_summit_data_file",       0,    100, 
-  "filefjell_summit_data",          200,    100,
-  "filefjell_summit_data_tidy",     400,    100,
-  "filefjell_type_cover_file",        0,    200, 
-  "filefjell_type_cover",           200,    200,
-  "filefjell_type_cover_tidy",      400,    200,
-  "filefjell_maintype_cover_tidy",  600,    200,
+  "filefjell_1972_2009_file",         0,   -250,
+  "filefjell_1972_2009",            200,   -250,
+  "filefjell_1972_tidy",            400,   -250,
+  "filefjell_dates_2008_2009_file",   0,   -150,
+  "filefjell_dates_2008_2009",      200,   -150,
+  "filefjell_2008_2009_tidy",       400,   -150,
+  "filefjell_1972_2008_2009_tidy",  600,   -200,
+  "filefjell_summit_data_file",       0,    -50, 
+  "filefjell_summit_data",          200,    -50,
+  "filefjell_summit_data_tidy",     400,    -50,
+  
+  "filefjell_2024_file",              0,     50,
+  "filefjell_2024",                 200,     50,
+  "filefjell_2024_tidy",            400,     50,
+  "filefjell_2025_file",              0,    150,
+  "filefjell_2025",                 200,    150,
+  "filefjell_2025_tidy",            400,    150,
+  "filefjell_2024_2025_tidy",       600,    100,
+  "filefjell_type_cover_file",        0,    250, 
+  "filefjell_type_cover",           200,    250,
+  "filefjell_type_cover_tidy",      400,    250,
+  "filefjell_maintype_cover_tidy",  600,    250,
   
   # Clean data
-  "filefjell_1972_2009_clean",      800,    -67,
+  "filefjell_1972_2008_2009_clean", 800,   -100,
   "filefjell_2024_2025_clean",      800,    100,
   "filefjell_data_clean",          1000,      0
   
@@ -70,7 +75,7 @@ manual_positions <- tribble(
 
 nodes <- vis_data$x$nodes |> 
   left_join(manual_positions, by = "name") |> 
-  mutate(hidden = ifelse(name %in% c("adj_label", "backwards_selection", "colour_mapping", "gg_modvars", "gg_yearline", "model_diagnosis", "model_distribution", "model_homoscedasticity", "optimizer", "remove_terms"), TRUE, FALSE))
+  mutate(hidden = ifelse(name %in% c("adj_label", "backwards_selection", "colour_mapping", "data_tidying", "gg_modvars", "gg_yearline", "model_diagnosis", "model_distribution", "model_homoscedasticity", "optimizer", "remove_terms"), TRUE, FALSE))
 
 visNetwork(nodes, edges) |> 
   visNodes() |> 
