@@ -19,6 +19,24 @@ conflicts_prefer(
 options(scipen = 999)
 
 
+
+# Data cleaning----
+
+data_tidying <- function(data) {
+  data_tidy <- data %>%
+    clean_names() %>%
+    relocate(year) %>% 
+    rename(any_of(c(summit = "top", elevation = "height", elevation = "top_height", weather = "vaer"))) %>%
+    mutate(summit = str_replace_all(summit, " ", "_"),
+           across(any_of("date"), ~ dmy(.x)),
+           across(any_of("weather"), ~ str_replace_all(.x, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))),
+           across(any_of("recorder"), ~ str_replace_all(.x, c("\\+", "_", " \\+ ", "_"))),
+           species = str_replace_all(species, c(" " = "_", "\\." = ""))) %>%
+    arrange(desc(elevation), species)
+  return(data_tidy)
+}
+
+
 # Plotting----
 
 gg_yearline <- function(data, y_var, x_var, row_var, col_var, colour_var) {
