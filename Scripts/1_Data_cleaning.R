@@ -7,9 +7,9 @@ source("Scripts/0_setup.R")
 # Data----
 
 filefjell_1972_2009 <- read_csv2("data_raw/Filefjell_1972_2009.csv")
-filefjell_dates_2008_2009 <- read_csv2("data_raw/Filefjell_dates_2008_2009.csv")
 filefjell_2024 <- read_csv2("data_raw/Filefjell_2024.csv")
 filefjell_2025 <- read_csv2("data_raw/Filefjell_2025.csv")
+filefjell_visit_dates <- read_csv2("data_raw/Visit_dates.csv")
 filefjell_summit_data <- read_csv2("data_raw/Summit_data.csv")
 filefjell_type_cover <- read_csv2("data_raw/Type_cover.csv")
 filefjell_dahlr <- read_csv2("data_raw/DahlR_values.csv")
@@ -22,16 +22,26 @@ filefjell_dahlr <- read_csv2("data_raw/DahlR_values.csv")
 
 filefjell_1972_tidy <- filefjell_1972_2009 |> 
   filter(Year == 1972) |> 
-  mutate(date = NA, 
-         recorder = "Kåre") |> 
-  pivot_longer(cols = !c(Summit:Year, date, recorder), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+  left_join(filefjell_visit_dates |> 
+              select(!c(Year2:Data2)), 
+            by = c("Summit", "Year")) |> 
+  pivot_longer(cols = !c(Summit:Year, Date, Recorder), 
+               names_to = "species", 
+               values_to = "distance", 
+               values_drop_na = TRUE) |> 
   data_tidying()
 
 filefjell_2008_2009_tidy <- filefjell_1972_2009 |> 
   filter(Year == 2009) |> 
-  left_join(filefjell_dates_2008_2009, by = "Summit") |> 
-  mutate(Year = if_else(grepl("2008", Date), 2008, Year)) |> 
-  pivot_longer(cols = !c(Summit:Year, Date, Recorder), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+  select(!Year) |> 
+  left_join(filefjell_visit_dates |> 
+              filter(Year %in% c(2008, 2009)) |> 
+              select(!c(Year2:Data2)), 
+            by = c("Summit")) |> 
+  pivot_longer(cols = !c(Summit, Height, Year:Recorder), 
+               names_to = "species", 
+               values_to = "distance", 
+               values_drop_na = TRUE) |> 
   data_tidying()
 
 filefjell_1972_2008_2009_tidy <- filefjell_1972_tidy |> 
