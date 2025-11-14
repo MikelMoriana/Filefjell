@@ -30,7 +30,7 @@ data_tidying <- function(data) {
     mutate(summit = str_replace_all(summit, " ", "_"),
            across(any_of("date"), ~ dmy(.x)),
            across(any_of("weather"), ~ str_replace_all(.x, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))),
-           across(any_of("recorder"), ~ str_replace_all(.x, c("\\+", "_", " \\+ ", "_"))),
+           across(any_of("recorder"), ~ str_replace_all(.x, c(" \\+ " = "_", "\\+" = "_"))),
            species = str_replace_all(species, c(" " = "_", "\\." = ""))) %>%
     arrange(desc(elevation), species)
   return(data_tidy)
