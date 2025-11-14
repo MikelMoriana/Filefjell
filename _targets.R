@@ -19,6 +19,15 @@ tar_source("Scripts/0_setup.R")
 list(
   # Tidy files----
   tar_target(
+    name = filefjell_visit_dates_file, 
+    command = "data_raw/Visit_dates.csv", 
+    format = "file"
+  ), 
+  tar_target(
+    name = filefjell_visit_dates, 
+    command = read_csv2(filefjell_visit_dates_file)
+  ), 
+  tar_target(
     name = filefjell_1972_2009_file, 
     command = "data_raw/Filefjell_1972_2009.csv", 
     format = "file"
@@ -31,27 +40,28 @@ list(
     name = filefjell_1972_tidy,
     command = filefjell_1972_2009 |> 
       filter(Year == 1972) |> 
-      mutate(date = NA, 
-             recorder = "Kåre") |> 
-      pivot_longer(cols = !c(Summit:Year, date, recorder), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+      left_join(filefjell_visit_dates |> 
+                  select(!c(Year2:Data2)), 
+                by = c("Summit", "Year")) |> 
+      pivot_longer(cols = !c(Summit:Year, Date, Recorder), 
+                   names_to = "species", 
+                   values_to = "distance", 
+                   values_drop_na = TRUE) |> 
       data_tidying()
   ),
-  tar_target(
-    name = filefjell_dates_2008_2009_file, 
-    command = "data_raw/Filefjell_dates_2008_2009.csv", 
-    format = "file"
-  ), 
-  tar_target(
-    name = filefjell_dates_2008_2009, 
-    command = read_csv2(filefjell_dates_2008_2009_file)
-  ), 
   tar_target(
     name = filefjell_2008_2009_tidy,
     command = filefjell_1972_2009 |> 
       filter(Year == 2009) |> 
-      left_join(filefjell_dates_2008_2009, by = "Summit") |> 
-      mutate(Year = if_else(grepl("2008", Date), 2008, Year)) |> 
-      pivot_longer(cols = !c(Summit:Year, Date, Recorder), names_to = "species", values_to = "distance", values_drop_na = TRUE) |> 
+      select(!Year) |> 
+      left_join(filefjell_visit_dates |> 
+                  filter(Year %in% c(2008, 2009)) |> 
+                  select(!c(Year2:Data2)), 
+                by = c("Summit")) |> 
+      pivot_longer(cols = !c(Summit, Height, Year:Recorder), 
+                   names_to = "species", 
+                   values_to = "distance", 
+                   values_drop_na = TRUE) |> 
       data_tidying()
   ),
   tar_target(
