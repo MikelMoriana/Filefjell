@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "glmmTMB", "DHARMa", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "glmmTMB", "DHARMa", "brms", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -13,7 +13,11 @@ local({
 
 conflicts_prefer(
   dplyr::filter,
-  dplyr::lag
+  dplyr::lag,
+  brms::ar,
+  brms::lognormal,
+  stats::chisq.test,
+  stats::fisher.test
 )
 
 options(scipen = 999)
