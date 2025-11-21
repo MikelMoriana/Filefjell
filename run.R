@@ -43,17 +43,17 @@ manual_positions <- tribble(
   # Clean data
   "filefjell_1972_2008_2009_clean", 800,   -100,
   "filefjell_2024_2025_clean",      800,    100,
-  "filefjell_data_clean",          1000,      0
+  "filefjell_data_clean",          1000,      0,
   
-  # # 6
-  # "distance_change_data",          -100,   -100,
-  # "richness_data",                    0,   -100,
-  # "species_turnover_data",          150,   -100,
-  # # 7
-  # "distance_change_rate_mod",      -100,   -100,
-  # "richness_change_data",             0,   -100,
-  # "turnover_data",                  150,   -100,
-  # "colonizers_data",                250,   -100,
+  # Elevation change
+  "filefjell_visit_years",         1100,   -100,
+  "elevation_species",             1200,      0,
+  "species_turnover_data",          150,   -100,
+  
+  "elerate_all",                   1400,   -100,
+  "elevation_species_new",         1300,    100,
+  "elerate_new",                   1400,     0,
+  "elerate_new_bayes",             1600,     0
   # # 8
   # "richness_change_rate_mod",         0,   -100,
   # "lost_rate_mod",                  100,   -100,
