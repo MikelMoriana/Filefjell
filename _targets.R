@@ -199,29 +199,29 @@ list(
       arrange(summit, year, species)
   ),
   # Elevation----
-  tar_read(
-    name = filefjell_visit_years, 
-    command = filefjell_data_clean |> 
-      select(year, summit) |> 
-      distinct() |> 
-      pivot_wider(names_from = year, names_prefix = "y", values_from = year) |> 
-      mutate(first = 1972, 
+  tar_target(
+    name = filefjell_visit_years,
+    command = filefjell_data_clean |>
+      select(year, summit) |>
+      distinct() |>
+      pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
+      mutate(first = 1972,
              second = coalesce(y2008, y2009),
-             third = coalesce(y2024, y2025)) |> 
+             third = coalesce(y2024, y2025)) |>
       select(summit, first, second, third)
   ),
   tar_target(
     name = elevation_species,
-    command = filefjell_data_clean |> 
-      select(!c(date, recorder)) |> 
-      pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-      left_join(filefjell_visit_years, by = "summit") |> 
-      mutate(third = ifelse(!is.na(y2025), 2025, third), 
+    command = filefjell_data_clean |>
+      select(!c(date, recorder)) |>
+      pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |>
+      left_join(filefjell_visit_years, by = "summit") |>
+      mutate(third = ifelse(!is.na(y2025), 2025, third),
              distance1 = y1972,
-             distance2 = coalesce(y2008, y2009), 
-             distance3 = coalesce(y2024, y2025)) |> 
-      select(!c(y1972, y2008, y2009, y2024, y2025)) |> 
-      mutate(period1 = second - first, 
+             distance2 = coalesce(y2008, y2009),
+             distance3 = coalesce(y2024, y2025)) |>
+      select(!c(y1972, y2008, y2009, y2024, y2025)) |>
+      mutate(period1 = second - first,
              period2 = third - second)
   ),
   tar_target(
