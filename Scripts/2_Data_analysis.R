@@ -209,19 +209,19 @@ elerate_all |>
   ggplot() +
   geom_histogram(aes(x = rate))
 
-elerate_all_rate_mod <- glmmTMB(
+elerate_all_mod <- glmmTMB(
   rate ~ 
     period + (1 | summit) + (1 | species), 
   family = gaussian, 
   data = elerate_all)
 
-elerate_all_rate_mod |> model_diagnosis()
-elerate_all_rate_mod |> model_homoscedasticity()
-elerate_all_rate_mod |> summary()
+elerate_all_mod |> model_diagnosis()
+elerate_all_mod |> model_homoscedasticity()
+elerate_all_mod |> summary()
 
 # No distributions I try get closely to fitting. I try bayesian. THIS IS NOT FINISHED, I FOCUS ON NEW
 
-elerate_all_rate_bayes <- brm(
+elerate_all_bayes <- brm(
   rate ~ 
     period + (1|summit) + (1|species),
   family = student(), 
@@ -231,17 +231,17 @@ elerate_all_rate_bayes <- brm(
 
 # Diagnosis
 
-elerate_all_rate_bayes |> summary() # Converged
-elerate_all_rate_bayes |> plot() # "hairy caterpillars"
+elerate_all_bayes |> summary() # Converged
+elerate_all_bayes |> plot() # "hairy caterpillars"
 
-withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "dens_overlay"))
-withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "hist"))
-withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "scatter_avg"))
-withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "stat"))
+withr::with_seed(811, pp_check(elerate_all_bayes, type = "dens_overlay"))
+withr::with_seed(811, pp_check(elerate_all_bayes, type = "hist"))
+withr::with_seed(811, pp_check(elerate_all_bayes, type = "scatter_avg"))
+withr::with_seed(811, pp_check(elerate_all_bayes, type = "stat"))
 
-elerate_all_df <- data.frame(fitted = fitted(elerate_all_rate_bayes)[,1],
-                            resid = residuals(elerate_all_rate_bayes)[,1],
-                            predictor = elerate_all_rate_bayes$data$period)
+elerate_all_df <- data.frame(fitted = fitted(elerate_all_bayes)[,1],
+                            resid = residuals(elerate_all_bayes)[,1],
+                            predictor = elerate_all_bayes$data$period)
 plot(elerate_all_df$fitted, elerate_all_df$resid, 
      xlab = "Fitted values", ylab = "Residuals")
 ggplot(elerate_all_df, aes(x = predictor, y = resid)) +
@@ -249,10 +249,10 @@ ggplot(elerate_all_df, aes(x = predictor, y = resid)) +
   geom_smooth(method = "loess") +
   theme_minimal()
     
-bayes_R2(elerate_all_rate_bayes)
-loo(elerate_all_rate_bayes)
+bayes_R2(elerate_all_bayes)
+loo(elerate_all_bayes)
 
-elerate_all_rate_results <- elerate_all_rate_mod |> 
+elerate_all_results <- elerate_all_mod |> 
   ggeffects::ggpredict(terms = "period") |> 
   rename(period = x) |> 
   as.data.frame() |> 
