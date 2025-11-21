@@ -10,23 +10,22 @@ source("Scripts/0_setup.R")
 # Data----
 
 filefjell_data_clean <- tar_read(filefjell_data_clean)
-filefjell_visit_dates <- read_csv2("data_raw/Visit_dates.csv")
-filefjell_visit_dates_wide <- filefjell_visit_dates |> 
-  clean_names() |> 
-  select(summit, year) |>
-  mutate(summit =ifelse(summit == "Krekanosi S", "Krekanosi_S", summit)) |> 
+filefjell_visit_years <- filefjell_data_clean |> 
+  select(year, summit) |> 
+  distinct() |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = year) |> 
-  rename(first = y1972) |> 
-  mutate(second = coalesce(y2008, y2009)) |> 
-  mutate(third = coalesce(y2024, y2025)) |> 
+  mutate(first = 1972, 
+         second = coalesce(y2008, y2009),
+         third = coalesce(y2024, y2025)) |> 
   select(summit, first, second, third)
+
 
 ## Distance
 
 elevation_species <- filefjell_data_clean |> 
   select(!c(date, recorder)) |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-  left_join(filefjell_visit_dates_wide, by = "summit") |> 
+  left_join(filefjell_visit_years, by = "summit") |> 
   mutate(third = ifelse(!is.na(y2025), 2025, third), 
          distance1 = y1972,
          distance2 = coalesce(y2008, y2009), 
@@ -87,31 +86,25 @@ elerate_new <- elevation_species_new |>
 #   arrange(summit, species, period)
 
 
-## Richness
+## Turnover and richness
 
-richness_change <- filefjell_data_clean |>
-  summarise(.by = c(year, summit, elevation),
-            richness = n()) |>
-  pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |>
-  mutate(year1 = case_when(!is.na(y1972) ~ 1972),
-         year2 = case_when(!is.na(y2008) ~ 2008,
-                           !is.na(y2009) ~ 2009),
-         year3 = case_when(!is.na(y2024) ~ 2024,
-                           !is.na(y2025) ~ 2025)) |>
-  mutate(richness1 = y1972,
-         richness2 = coalesce(y2008, y2009),
-         richness3 = coalesce(y2024, y2025)) |>
-  mutate(period1 = year2 - year1,
-         change1 = richness2 - richness1,
-         period2 = year3 - year2,
-         change2 = richness3 - richness2) |>
-  select(-c(y1972, y2008, y2009, y2024, y2025)) |>
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  mutate(period = as.factor(period)) |>
-  mutate(change = case_when(period == "period1" ~ change1,
-                            period == "period2" ~ change2)) |>
-  mutate(rate = change / years) |>
-  select(!c(change1, change2))
+species_turnover <- elevation_species |>
+  mutate(presence1 = ifelse(is.na(distance1), 0, 1),
+         presence2 = ifelse(is.na(distance2), 0, 1),
+         presence3 = ifelse(is.na(distance3), 0, 1)) |>
+  select(!c(distance1, distance2, distance3)) |> 
+  mutate(turnover1 = presence2 - presence1,
+         turnover2 = presence3 - presence2) |> 
+  mutate(rate1 = turnover1 / period1,
+         rate2 = turnover2 / period2) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
+  mutate(period = as.factor(period)) |> 
+  mutate(rate = ifelse(period == "period1", rate1, rate2))
+
+richness_rate <- species_turnover |> 
+  summarise(.by = c(summit, period), rate = sum(rate))
+
+
 
 
 # Turnover
@@ -421,7 +414,7 @@ elerate_new_results <- elerate_new_bayesh |>
 
 ## Exploratoy graphs
 
-richness_change |>
+richness_rate |>
   ggplot(aes(x = period, y = rate)) +
   geom_violin() +
   labs(title = " elevations by Year",
@@ -429,7 +422,7 @@ richness_change |>
        y = "Vertical elevation to Top (meters)") +
   theme_minimal()
 
-richness_change |>
+richness_rate |>
   ggplot(aes(x = summit:period, y = rate, color = summit)) +
   geom_point() +
   labs(title = "Plot of richness change per year",
@@ -442,7 +435,7 @@ richness_change |>
 
 ## Modelling
 
-richness_change |> 
+richness_rate |> 
   ggplot() +
   geom_histogram(aes(x = rate))
 
@@ -450,7 +443,7 @@ riccha_rate_mod <- glmmTMB(
   rate ~
     period + (1 | summit),
   family = gaussian,
-  data = richness_change)
+  data = richness_rate)
 
 riccha_rate_mod |> model_diagnosis() # No problems
 riccha_rate_mod |> model_homoscedasticity() # No problems
