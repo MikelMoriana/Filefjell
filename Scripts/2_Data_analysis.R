@@ -23,42 +23,28 @@ filefjell_visit_dates_wide <- filefjell_visit_dates |>
 
 ## Distance
 
-# Since we are using change, we decide to use change in elevation instead of change in distance, since it is more intuitive (we subtract the value the first year from the value the second year)
-
-elevation_change <- filefjell_data_clean |>
-  select(!c(date, recorder)) |>
-  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |>
-  mutate(distance2 = coalesce(y2008, y2009),
-         distance3 = coalesce(y2024, y2025)) |>
-  mutate(year1 = case_when(!is.na(y1972) ~ 1972),
-         year2 = case_when(!is.na(y2008) ~ 2008,
-                           !is.na(y2009) ~ 2009),
-         year3 = case_when(!is.na(y2024) ~ 2024,
-                           !is.na(y2025) ~ 2025)) |> 
-  relocate(year1, .before = y1972) |>
-  relocate(year2, .after = y1972) |>
-  relocate(year3, .before = distance3) |>
-  select(!c(y2008, y2009, y2024, y2025)) |>
-  rename(distance1 = y1972)
-
-elevation_change_new <- elevation_change |> 
+elevation_species <- filefjell_data_clean |> 
+  select(!c(date, recorder)) |> 
+  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
   left_join(filefjell_visit_dates_wide, by = "summit") |> 
-  mutate(year1 = ifelse(is.na(year1) & !is.na(distance2), first, year1),
-         adj_distance1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
-         year2 = ifelse(is.na(year2) & !is.na(distance3), second, year2),
-         adj_distance2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2)) |>
-  relocate(adj_distance1, .after = distance1) |> 
-  relocate(adj_distance2, .after = distance2) |> 
-  select(!c(first, second, third))
+  mutate(third = ifelse(!is.na(y2025), 2025, third), 
+         distance1 = y1972,
+         distance2 = coalesce(y2008, y2009), 
+         distance3 = coalesce(y2024, y2025)) |> 
+  select(!c(y1972, y2008, y2009, y2024, y2025)) |> 
+  mutate(period1 = second - first, 
+         period2 = third - second)
 
+elevation_species_new <- elevation_species |> 
+  mutate(adj_dist1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
+         adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2))
+
+# As we are using change, we decide to use change in elevation instead of change in distance, since it is more intuitive (we subtract the value the first year from the value the second year)
 
 # Considering only species found all years at a summit
-
-elecha_all <- elevation_change |>
-  mutate(period1 = year2 - year1,
-         change1 = distance1 - distance2,
-         period2 = year3 - year2,
-         change2 = distance2 - distance3) |>
+elerate_all <- elevation_species |>
+  mutate(change1 = distance1 - distance2, 
+         change2 = distance2 - distance3) |> 
   filter(!is.na(change1) & !is.na(change2)) |>
   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
   mutate(period = as.factor(period)) |>
@@ -68,12 +54,9 @@ elecha_all <- elevation_change |>
   select(!c(change1, change2))
 
 # Considering also new species, giving them a conservative value of 33 metres below the top
-
-elecha_new <- elevation_change_new |>
-  mutate(period1 = year2 - year1,
-         change1 = adj_distance1 - adj_distance2,
-         period2 = year3 - year2,
-         change2 = adj_distance2 - distance3) |>
+elerate_new <- elevation_species_new |>
+  mutate(change1 = adj_dist1 - adj_dist2, 
+         change2 = adj_dist2 - distance3) |> 
   filter(!is.na(change1) & !is.na(change2)) |>
   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
   mutate(period = as.factor(period)) |>
@@ -87,68 +70,96 @@ elecha_new <- elevation_change_new |>
 # 
 # elevation_change_two_data <- filefjell_data_clean |> 
 #   pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
-#   mutate(per1 = case_when(is.na(y1972) ~ NA, 
+#   mutate(period1 = case_when(is.na(y1972) ~ NA, 
 #                           is.na(y2009) ~ NA, 
 #                           !is.na(y2009) & !is.na(y1972) ~ y2009 - y1972), 
-#          per2 = case_when(is.na(y2009) ~ NA, 
+#          period2 = case_when(is.na(y2009) ~ NA, 
 #                           is.na(y2024) ~ NA, 
 #                           !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009)) |> 
 #   select(-c(y1972, y2009, y2024)) |> 
-#   pivot_longer(cols =c("per1", "per2"), names_to = "period", values_to = "distance_change") |> 
+#   pivot_longer(cols =c("period1", "period2"), names_to = "period", values_to = "distance_change") |> 
 #   mutate(elevation_change = distance_change * -1) |> 
 #   select(-distance_change) |> 
-#   mutate(elevation_change_rate = case_when(period == "per1" ~ elevation_change / 37, 
-#                                           period == "per2" ~ elevation_change / 15)) |> 
+#   mutate(elevation_change_rate = case_when(period == "period1" ~ elevation_change / 37, 
+#                                           period == "period2" ~ elevation_change / 15)) |> 
 #   filter(!is.na(elevation_change)) |> 
 #   mutate(period = as.factor(period)) |> 
 #   arrange(summit, species, period)
-# 
-# 
-# 
-# ## Richness
-# 
-# richness_data <- filefjell_data_clean |> 
-#   summarise(.by = c(year, summit, elevation), 
-#             richness = n())
-# 
-# richness_change_data <- richness_data |> 
-#   pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |> 
-#   mutate(per1 = y2009 - y1972, 
-#          per2 = y2024 - y2009) |> 
-#   select(-c(y1972, y2009, y2024)) |> 
-#   pivot_longer(cols = c(per1, per2), names_to = "period", values_to = "richness_change") |> 
-#   mutate(richness_change_rate = case_when(period == "per1" ~ richness_change / 37, 
-#                                           period == "per2" ~ richness_change / 15)) |> 
-#   mutate(period = as.factor(period))
-# 
-# 
-# # Turnover
-# 
-# species_turnover_data <- filefjell_data_clean |> 
-#   mutate(presence = ifelse(!is.na(distance), 1, 0)) |> 
-#   select(-distance) |> 
-#   arrange(species) |> 
-#   pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |> 
-#   arrange(summit, species) |> 
-#   mutate(turnover09 = y2009 - y1972) |> 
-#   mutate(turnover24 = y2024 - y2009)
-# 
-# turnover_data <- species_turnover_data |> 
-#   summarise(.by = summit, 
-#             per1_lost = sum(turnover09 == -1), 
-#             per1_nochange = sum(turnover09 == 0), 
-#             per1_new = sum(turnover09 == 1), 
-#             per2_lost = sum(turnover24 == -1), 
-#             per2_nochange = sum(turnover24 == 0), 
-#             per2_new = sum(turnover24 == 1)) |> 
-#   pivot_longer(cols = starts_with("per"), 
-#                names_to = c("period", ".value"), 
-#                names_sep = "_") |> 
-#   mutate(number_years = ifelse(period == "per1", 37, 15)) |> 
-#   mutate(lost_rate = lost / number_years, 
-#          new_rate = new / number_years) |> 
-#   mutate(period = as.factor(period))
-# 
+
+
+## Richness
+
+richness_change <- filefjell_data_clean |>
+  summarise(.by = c(year, summit, elevation),
+            richness = n()) |>
+  pivot_wider(names_from = year, names_prefix = "y", values_from = richness) |>
+  mutate(year1 = case_when(!is.na(y1972) ~ 1972),
+         year2 = case_when(!is.na(y2008) ~ 2008,
+                           !is.na(y2009) ~ 2009),
+         year3 = case_when(!is.na(y2024) ~ 2024,
+                           !is.na(y2025) ~ 2025)) |>
+  mutate(richness1 = y1972,
+         richness2 = coalesce(y2008, y2009),
+         richness3 = coalesce(y2024, y2025)) |>
+  mutate(period1 = year2 - year1,
+         change1 = richness2 - richness1,
+         period2 = year3 - year2,
+         change2 = richness3 - richness2) |>
+  select(-c(y1972, y2008, y2009, y2024, y2025)) |>
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  mutate(period = as.factor(period)) |>
+  mutate(change = case_when(period == "period1" ~ change1,
+                            period == "period2" ~ change2)) |>
+  mutate(rate = change / years) |>
+  select(!c(change1, change2))
+
+
+# Turnover
+# I HAVE TO FIGURE OUT HOW I DO TO KEEP THE YEAR, SO THAT I CAN CALCULATE THE RATE
+# mAYBE CREATE AN OBJECT WITH SPECIES AND YEAR FOUND? AND JOIN IT AFTERWARDS
+turnover_species <- filefjell_data_clean |>
+  select(!c(date, recorder)) |>
+  mutate(presence = ifelse(!is.na(distance), 1, 0)) |>
+  select(-distance) |>
+  pivot_wider(names_from = "year", names_prefix = "y", values_from = "presence", values_fill = 0) |>
+  arrange(summit, species) |>
+  mutate(year1 = case_when(!is.na(y1972) ~ 1972),
+         year2 = case_when(!is.na(y2008) ~ 2008,
+                           !is.na(y2009) ~ 2009),
+         year3 = case_when(!is.na(y2024) ~ 2024,
+                           !is.na(y2025) ~ 2025)) |>
+  mutate(presence1 = y1972,
+         presence2 = y2008 + y2009,
+         presence3 = y2024 + y2025) |>
+  select(!c(y1972, y2008, y2009, y2024, y2025)) |>
+  mutate(period1 = year2 - year1,
+         change1 = presence2 - presence1,
+         period2 = year3 - year2,
+         change2 = presence3 - presence2) |>
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  mutate(period = as.factor(period)) |>
+  mutate(change = case_when(period == "period1" ~ change1,
+                            period == "period2" ~ change2)) |>
+  mutate(rate = change / years) |>
+  select(!c(change1, change2))
+
+turnover_summit <- turnover_species |>
+  summarise(.by = c(summit, period),
+            lost = sum(rate < 0),
+            nochange = sum(rate == 0),
+            new = sum(rate > 1)) |>
+  pivot_longer(cols = starts_with("per"),
+               names_to = c("period", ".value"),
+               names_sep = "_")
+
+
+turnover_data <- species_turnover_data |>
+  
+  mutate(number_years = ifelse(period == "period1", 37, 15)) |>
+  mutate(lost_rate = lost / number_years,
+         new_rate = new / number_years) |>
+  mutate(period = as.factor(period))
+
 # 
 # # New species by nature type
 # 
@@ -188,60 +199,60 @@ elecha_new <- elevation_change_new |>
 
 
 
-# Elevation change----
+# Elevation change NOT FINISHED----
 
 ## Only species found all three years TO FINISH
 
 # Model
 
-elecha_all |> 
+elerate_all |> 
   ggplot() +
   geom_histogram(aes(x = rate))
 
-elecha_all_rate_mod <- glmmTMB(
+elerate_all_rate_mod <- glmmTMB(
   rate ~ 
     period + (1 | summit) + (1 | species), 
   family = gaussian, 
-  data = elecha_all)
+  data = elerate_all)
 
-elecha_all_rate_mod |> model_diagnosis()
-elecha_all_rate_mod |> model_homoscedasticity()
-elecha_all_rate_mod |> summary()
+elerate_all_rate_mod |> model_diagnosis()
+elerate_all_rate_mod |> model_homoscedasticity()
+elerate_all_rate_mod |> summary()
 
-# No distributions I try get closely to fitting. I try bayesian
+# No distributions I try get closely to fitting. I try bayesian. THIS IS NOT FINISHED, I FOCUS ON NEW
 
-elecha_all_rate_bayes <- brm(
+elerate_all_rate_bayes <- brm(
   rate ~ 
     period + (1|summit) + (1|species),
   family = student(), 
   prior(gamma(55, 0.1), class = "nu"),
-  data = elecha_all,
+  data = elerate_all,
   seed = 811)
 
 # Diagnosis
 
-elecha_all_rate_bayes |> summary() # Converged
-elecha_all_rate_bayes |> plot() # "hairy caterpillars"
+elerate_all_rate_bayes |> summary() # Converged
+elerate_all_rate_bayes |> plot() # "hairy caterpillars"
 
-withr::with_seed(811, pp_check(elecha_all_rate_bayes, type = "dens_overlay"))
-withr::with_seed(811, pp_check(elecha_all_rate_bayes, type = "hist"))
-withr::with_seed(811, pp_check(elecha_all_rate_bayes, type = "scatter_avg"))
-withr::with_seed(811, pp_check(elecha_all_rate_bayes, type = "stat"))
+withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "dens_overlay"))
+withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "hist"))
+withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "scatter_avg"))
+withr::with_seed(811, pp_check(elerate_all_rate_bayes, type = "stat"))
 
-elecha_all_df <- data.frame(fitted = fitted(elecha_all_rate_bayes)[,1],
-                            resid = residuals(elecha_all_rate_bayes)[,1],
-                            predictor = elecha_all_rate_bayes$data$period)
-plot(elecha_all_df$fitted, elecha_all_df$resid, 
+elerate_all_df <- data.frame(fitted = fitted(elerate_all_rate_bayes)[,1],
+                            resid = residuals(elerate_all_rate_bayes)[,1],
+                            predictor = elerate_all_rate_bayes$data$period)
+plot(elerate_all_df$fitted, elerate_all_df$resid, 
      xlab = "Fitted values", ylab = "Residuals")
-ggplot(elecha_all_df, aes(x = predictor, y = resid)) +
+ggplot(elerate_all_df, aes(x = predictor, y = resid)) +
   geom_point() +
   geom_smooth(method = "loess") +
   theme_minimal()
     
-bayes_R2(elecha_all_rate_bayes)
-loo(elecha_all_rate_bayes)
+bayes_R2(elerate_all_rate_bayes)
+loo(elerate_all_rate_bayes)
 
-elecha_all_rate_results <- elecha_all_rate_mod |> 
+elerate_all_rate_results <- elerate_all_rate_mod |> 
   ggeffects::ggpredict(terms = "period") |> 
   rename(period = x) |> 
   as.data.frame() |> 
@@ -249,77 +260,128 @@ elecha_all_rate_results <- elecha_all_rate_mod |>
   relocate(model)
 
 
-## Including new species
 
-elecha_new |> 
+# Elevation change Including new species----
+
+### Model
+
+elerate_new |> 
   ggplot() +
   geom_histogram(aes(x = rate))
 
-elecha_new_rate_mod <- glmmTMB(
+elerate_new_mod <- glmmTMB(
   rate ~ 
     period + (1 | summit) + (1 | species), 
   family = t_family,
-  data = elecha_new)
+  data = elerate_new)
 
-elecha_new_rate_mod |> model_diagnosis()
-elecha_new_rate_mod |> model_homoscedasticity()
-elecha_new_rate_mod |> summary()
+elerate_new_mod |> model_diagnosis()
+elerate_new_mod |> model_homoscedasticity()
+elerate_new_mod |> summary()
 
-# No distributions I try get closely to fitting. I try bayesian
+# No distributions I try get close to fitting. I try bayesian
 
-elecha_new_rate_bayes <- brm(
+elerate_new_bayes <- brm(
   rate ~ 
     period + (1|summit) + (1|species),
   family = student(), 
-  data = elecha_new,
+  data = elerate_new,
   seed = 811)
 
-# Diagnosis
 
-elecha_new_rate_bayes |> summary() # Converged
-elecha_new_rate_bayes |> plot() # "hairy caterpillars"
+## Diagnosis
 
-withr::with_seed(811, pp_check(elecha_new_rate_bayes, type = "dens_overlay"))
-withr::with_seed(811, pp_check(elecha_new_rate_bayes, type = "hist"))
-withr::with_seed(811, pp_check(elecha_new_rate_bayes, type = "scatter_avg"))
-withr::with_seed(811, pp_check(elecha_new_rate_bayes, type = "stat"))
+# Model convergence and sample quality
+elerate_new_bayes |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_new_bayes |> plot() # hairy caterpillars
 
-# Extract posterior draws
-draws <- as_draws_df(elecha_new_rate_bayes)
+# Posterior predictive check
+withr::with_seed(811, pp_check(elerate_new_bayes, type = "dens_overlay")) # Correct range, but misses the slight bump on the positive side
 
-# Compute probabilities
-prob_intercept_gt0 <- mean(draws$b_Intercept > 0)
-prob_period_lt0 <- mean(draws$b_periodperiod2 < 0)
-
-prob_intercept_gt0
-prob_period_lt0
-
-bayesplot::mcmc_areas(
-    draws,
-    pars = c("b_Intercept", "b_periodperiod2"),
-    prob = 0.95  # 95% credible interval
-  )
-
-# The intercept had a posterior mean of 0.16 (95% CI: 0.12–0.19), with a posterior probability of being > 0 equal to 1.00.
-# The effect of period was -0.12 (95% CI: -0.16 to -0.08), with a posterior probability of being < 0 equal to 1.00.
-
-
-
+# Residuals
+elerate_new_bayes_res <- tibble(
+  fitted = fitted(elerate_new_bayes)[, "Estimate"],
+  residuals = residuals(elerate_new_bayes)[, "Estimate"],
+  period = elerate_new$period,
+  summit = elerate_new$summit,
+  species = elerate_new$species
+)
+ggplot(elerate_new_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+# It seems there is heteroskedasticity, with period 1 having greater variance
+pp_check(elerate_new_bayes, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
 
 
 
+### Model 2
 
-pp_check(elecha_new_rate_bayes)
+elerate_new_bayesh <- brm(
+  bf(rate ~ 
+    period + (1|summit) + (1|species),
+    sigma ~ period),
+  family = student(), 
+  data = elerate_new,
+  seed = 811)
+loo(elerate_new_bayes, elerate_new_bayesh) # The new model is more complex, but better
 
-elecha_new_rate_bayes |> summary()
+## Diagnosis
 
-hypothesis(elecha_new_rate_bayes, "Intercept > 0")  # Is period 1 > 0?
-hypothesis(elecha_new_rate_bayes, "Intercept + periodperiod2 > 0")  # Is period 2 > 0?
-hypothesis(elecha_new_rate_bayes, "periodperiod2 < 0")  # Is period 2 lower than period 1?
+# Model convergence and sample quality
+elerate_new_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_new_bayesh |> plot() # hairy caterpillars
 
-em <- emmeans::emmeans(elecha_new_rate_bayes, ~ period)
-summary(em)
-plot(em)
+# Posterior predictive check
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) # Correct range, but misses the slight bump on the positive side
+
+# Residuals
+elerate_new_bayesh_res <- tibble(
+  fitted = fitted(elerate_new_bayesh)[, "Estimate"],
+  residuals = residuals(elerate_new_bayesh)[, "Estimate"],
+  period = elerate_new$period,
+  summit = elerate_new$summit,
+  species = elerate_new$species
+)
+ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+# It seems there is still heteroskedasticity, with period 1 having greater variance
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "period")) # Still some heteroskedasticity, but the distributions fit better
+
+# Random effect structure
+elerate_new_bayesh |> ranef()
+elerate_new_bayesh |> VarCorr()
+elerate_new_bayesh |> bayes_R2()
+
+# Outliers
+elerate_new_bayesh |> loo() # No influential points
+
+# Summary
+elerate_new_bayesh |> summary()
+
+elerate_new_results <- elerate_new_bayesh |> 
+  fixef() |> 
+  as_tibble(rownames = "term") |> 
+  clean_names() |> 
+  filter(!grepl("sigma", term)) |> 
+  select(term, estimate, est_error, q2_5, q97_5) |> 
+  rename(std_error = est_error) |> 
+  rename(conf_low = q2_5) |> 
+  rename(conf_high = q97_5) |> 
+  mutate(model = "elevation") |> 
+  relocate(model)
 
 
 # ## Species found either in 1972 and 2009, or 2009 and 2024
@@ -344,61 +406,63 @@ plot(em)
 #   relocate(model)
 # 
 # test_elevation_two <- elevation_change_two_data |> 
-#   mutate(period = factor(period, level = c("per2", "per1")))
+#   mutate(period = factor(period, level = c("period2", "period1")))
 # test_elevation_two_mod <- glmmTMB(
 #   elevation_change_rate ~ 
 #     period + (1 | summit) + (1 | species), 
 #   family = gaussian, 
 #   data = test_elevation_two)
 # test_elevation_two_mod |> summary()
-# 
-# 
-# 
-# 
-# # Richness change----
-# 
-# ## Exploratoy graphs
-# 
-# richness_change_data |> 
-#   ggplot(aes(x = period, y = richness_change_rate)) +
-#   geom_violin() + 
-#   labs(title = " elevations by Year",
-#        x = "Year",
-#        y = "Vertical elevation to Top (meters)") +
-#   theme_minimal()
-# 
-# richness_change_data |> 
-#   ggplot(aes(x = summit:period, y = richness_change_rate, color = summit)) +
-#   geom_point() +
-#   labs(title = "Plot of richness change per year",
-#        x = "Year",
-#        y = "Richness change (species/year)") +
-#   theme_minimal() +
-#   theme(legend.position = "none")
-# 
-# # Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
-# 
-# 
-# ## Modelling
-# 
-# hist(richness_change_data$richness_change_rate)
-# 
-# richness_change_rate_mod <- glmmTMB(
-#   richness_change_rate ~ 
-#     period + (1 | summit), 
-#   family = gaussian, 
-#   data = richness_change_data)
-# 
-# richness_change_rate_mod |> model_diagnosis()
-# richness_change_rate_mod |> summary()
-# 
-# richness_results <- richness_change_rate_mod |> 
-#   ggpredict(terms = "period") |> 
-#   rename(period = x) |> 
-#   as.data.frame() |> 
-#   mutate(model = "richness") |> 
-#   relocate(model)
-# 
+
+
+
+
+# Richness change----
+
+## Exploratoy graphs
+
+richness_change |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin() +
+  labs(title = " elevations by Year",
+       x = "Year",
+       y = "Vertical elevation to Top (meters)") +
+  theme_minimal()
+
+richness_change |>
+  ggplot(aes(x = summit:period, y = rate, color = summit)) +
+  geom_point() +
+  labs(title = "Plot of richness change per year",
+       x = "Year",
+       y = "Richness change (species/year)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
+
+
+## Modelling
+
+richness_change |> 
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+riccha_rate_mod <- glmmTMB(
+  rate ~
+    period + (1 | summit),
+  family = gaussian,
+  data = richness_change)
+
+riccha_rate_mod |> model_diagnosis() # No problems
+riccha_rate_mod |> model_homoscedasticity() # No problems
+riccha_rate_mod |> summary()
+
+riccha_rate_results <- riccha_rate_mod |>
+  tidy(effects = "fixed", conf.int = TRUE) |> 
+  clean_names() |> 
+  mutate(term = ifelse(term == "(Intercept)", "Intercept", term)) |> 
+  select(term, estimate, std_error, conf_low, conf_high) |> 
+  mutate(model = "richness") |> 
+  relocate(model)
 # 
 # 
 # 
@@ -484,7 +548,7 @@ plot(em)
 #   geom_violin() + 
 #   stat_summary(fun.data = "mean_cl_boot", geom = "pointrange", colour = "white") + 
 #   facet_grid(cols = vars(species_change), labeller = adj_label) + 
-#   scale_fill_manual("period", values = c("per1" = "#859395", "per2" = "#f58800"), labels = c("1972-2009", "2009-2024")) + 
+#   scale_fill_manual("period", values = c("period1" = "#859395", "period2" = "#f58800"), labels = c("1972-2009", "2009-2024")) + 
 #   labs(x = "period", y = "Species / Year") + 
 #   theme_bw() + 
 #   theme(text = element_text(size = 20, family = "serif"), 
@@ -512,7 +576,7 @@ plot(em)
 # facet_labels <- data.frame(model = unique(results_table$model), label = letters[1:4], x = -0.2, y = 1.5)
 # 
 # results_graph <- results_table |> 
-#   mutate(period = factor(period, levels = c("per2", "per1"))) |> 
+#   mutate(period = factor(period, levels = c("period2", "period1"))) |> 
 #   ggplot(aes(x = predicted, y = period, colour = period)) + 
 #   theme_minimal() + 
 #   facet_grid(rows = vars(model), switch = "y", labeller = adj_label) + 
