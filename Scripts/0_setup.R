@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "glmmTMB", "DHARMa", "brms","broom.mixed", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "glmmTMB", "DHARMa", "emmeans", "brms","broom.mixed", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -75,11 +75,17 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
   return(plot)
 }
 
-adj_label <- as_labeller(c("new_rate" = "New", "lost_rate" = "Lost", "altitude" = "<b>a)</b> Altitude<br>change", "richness" = "<b>b)</b> Richness<br>change", "new" = "<b>c)</b> Number of<br>new species", "lost" = "<b>d)</b> Number of<br>lost species", "per1" = "1972-2009", "per2" = "2009-2024"))
+adj_label <- c("elevation" = "<b>a)</b> Altitude<br>change", "richness" = "<b>b)</b> Richness<br>change", "new" = "<b>c)</b> New species", "lost" = "<b>d)</b> Lost species")
 
 colour_mapping <-  list(
-  period = c("per1" = "#859395", "per2" = "#f58800")
+  period = c("period1" = "#859395", "period2" = "#f58800")
 )
+
+
+# Model results----
+
+
+
 
 
 # Model fitness----
