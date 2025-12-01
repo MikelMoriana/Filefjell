@@ -9,6 +9,7 @@ source("Scripts/0_setup.R")
 filefjell_1972_2009 <- read_csv2("data_raw/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("data_raw/Filefjell_2024.csv")
 filefjell_2025 <- read_csv2("data_raw/Filefjell_2025.csv")
+filefjell_species <- read_csv2("data_raw/Filefjell_species.csv")
 filefjell_visit_dates <- read_csv2("data_raw/Visit_dates.csv")
 filefjell_summit_data <- read_csv2("data_raw/Summit_data.csv")
 filefjell_type_cover <- read_csv2("data_raw/Type_cover.csv")
@@ -130,7 +131,7 @@ filefjell_tidy_new
 # Agr_cap, Alc_sp, Cal_phr, Car_sax, Cer_alp_lan, Gen_niv, Jun_tri, Lyc_ann, Lyc_cla, Poa_jem, Sal_sp, Sil_aca, Vah_atr
 
 # In 2009 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 and 2025 as well
-# In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan. We use the former
+# In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan. We use the latter
 # In 2009 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri. We use the latter
 # In 2009 Poa x jemtlandica was shortened to Poa x jem, while in 2024 it was shortened to Poa_jem. We use the latter
 # Sal phy was found in Graveggi in 2009, but not in the resampling. An unidentified Salix was found in Unnamed in 2024. Could have been phy, but not sure. And it was a different summit quite far from the other anyways. We keep them as they are
@@ -149,7 +150,8 @@ filefjell_1972_2008_2009_clean <- filefjell_summit_data_tidy |>
   relocate(year) |> 
   select(!elevation) |>
   rename(elevation = elevation_correct) |>
-  mutate(species = case_when(species == "Jun_trif" ~ "Jun_tri",
+  mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan", 
+                             species == "Jun_trif" ~ "Jun_tri",
                              species == "Poa_x_jem" ~ "Poa_jem",
                              species == "Sil_acu" ~ "Sil_aca",
                              TRUE ~ species))
@@ -163,7 +165,6 @@ filefjell_2024_2025_clean <- filefjell_summit_data_tidy |>
   rename(elevation = elevation_correct) |> 
   relocate(elevation, .after = summit) |> 
   mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
-                             species == "Cer_alp_lan" ~ "Cer_lan", 
                              TRUE ~ species)) |> 
   left_join(filefjell_maintype_cover_tidy |> select(summit, main_type, cover), by = c("summit", "main_type")) |> 
   relocate(cover, .after = type)
@@ -195,7 +196,11 @@ filefjell_clean_new
 filefjell_data_clean <- filefjell_2024_2025_clean |> 
   select(!c(weather, main_type, type, cover)) |> 
   rbind(filefjell_1972_2008_2009_clean) |> 
+  left_join(filefjell_species, by = "species") |> 
+  mutate(species = ifelse(!is.na(new_name), new_name, species)) |> 
+  select(!new_name) |> 
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |> 
+  relocate(category, .after = species) |> 
   arrange(summit, year, species)
 
 filefjell_data_clean |> write_csv("data_clean/Filefjell_data_clean.csv")
