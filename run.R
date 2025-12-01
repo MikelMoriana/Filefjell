@@ -41,6 +41,8 @@ manual_positions <- tribble(
   "filefjell_maintype_cover_tidy",  600,    250,
   
   # Clean data
+  "filefjell_species_file",         800,   -250,
+  "filefjell_species",             1000,   -200,
   "filefjell_1972_2008_2009_clean", 800,   -100,
   "filefjell_2024_2025_clean",      800,    100,
   "filefjell_data_clean",          1000,      0,
