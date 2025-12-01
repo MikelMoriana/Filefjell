@@ -159,6 +159,15 @@ list(
       summarise(.by = c(year, summit, date, recorder, main_type), 
                 cover = sum(cover))
   ),
+  tar_target(
+    name = filefjell_species_file,
+    command = "data_raw/Filefjell_species.csv",
+    format = "file"
+  ),
+  tar_target(
+    name = filefjell_species,
+    command = read_csv2(filefjell_species_file)
+  ),
   # Clean files----
   tar_target(
     name = filefjell_1972_2008_2009_clean,
@@ -169,7 +178,8 @@ list(
       relocate(year) |> 
       select(!elevation) |>
       rename(elevation = elevation_correct) |>
-      mutate(species = case_when(species == "Jun_trif" ~ "Jun_tri",
+      mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan", 
+                                 species == "Jun_trif" ~ "Jun_tri",
                                  species == "Poa_x_jem" ~ "Poa_jem",
                                  species == "Sil_acu" ~ "Sil_aca",
                                  TRUE ~ species))
@@ -185,7 +195,6 @@ list(
       rename(elevation = elevation_correct) |> 
       relocate(elevation, .after = summit) |> 
       mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
-                                 species == "Cer_alp_lan" ~ "Cer_lan", 
                                  TRUE ~ species)) |> 
       left_join(filefjell_maintype_cover_tidy |> select(summit, main_type, cover), by = c("summit", "main_type")) |> 
       relocate(cover, .after = type)
@@ -195,67 +204,71 @@ list(
     command = filefjell_2024_2025_clean |> 
       select(!c(weather, main_type, type, cover)) |> 
       rbind(filefjell_1972_2008_2009_clean) |> 
+      left_join(filefjell_species, by = "species") |> 
+      mutate(species = ifelse(!is.na(new_name), new_name, species)) |> 
+      select(!new_name) |> 
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |> 
+      relocate(category, .after = species) |> 
       arrange(summit, year, species)
-  ),
-  # Elevation----
-  tar_target(
-    name = filefjell_visit_years,
-    command = filefjell_data_clean |>
-      select(year, summit) |>
-      distinct() |>
-      pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
-      mutate(first = 1972,
-             second = coalesce(y2008, y2009),
-             third = coalesce(y2024, y2025)) |>
-      select(summit, first, second, third)
-  ),
-  tar_target(
-    name = elevation_species,
-    command = filefjell_data_clean |>
-      select(!c(date, recorder)) |>
-      pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |>
-      left_join(filefjell_visit_years, by = "summit") |>
-      mutate(third = ifelse(!is.na(y2025), 2025, third),
-             distance1 = y1972,
-             distance2 = coalesce(y2008, y2009),
-             distance3 = coalesce(y2024, y2025)) |>
-      select(!c(y1972, y2008, y2009, y2024, y2025)) |>
-      mutate(period1 = second - first,
-             period2 = third - second)
-  ),
-  tar_target(
-    name = elevation_species_new,
-    command = elevation_species |> 
-      mutate(adj_dist1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
-             adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2))
-  ),
-  tar_target(
-    name = elerate_all,
-    command = elevation_species |>
-      mutate(change1 = distance1 - distance2, 
-             change2 = distance2 - distance3) |> 
-      filter(!is.na(change1) & !is.na(change2)) |>
-      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-      mutate(period = as.factor(period)) |>
-      mutate(change = case_when(period == "period1" ~ change1,
-                                period == "period2" ~ change2)) |>
-      mutate(rate = change / years) |>
-      select(!c(change1, change2))
-  ),
-  tar_target(
-    name = elerate_new,
-    command = elevation_species_new |>
-      mutate(change1 = adj_dist1 - adj_dist2, 
-             change2 = adj_dist2 - distance3) |> 
-      filter(!is.na(change1) & !is.na(change2)) |>
-      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-      mutate(period = as.factor(period)) |>
-      mutate(change = case_when(period == "period1" ~ change1,
-                                period == "period2" ~ change2)) |>
-      mutate(rate = change / years) |>
-      select(!c(change1, change2))
-  ),
+  )
+  # # Elevation----
+  # tar_target(
+  #   name = filefjell_visit_years,
+  #   command = filefjell_data_clean |>
+  #     select(year, summit) |>
+  #     distinct() |>
+  #     pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
+  #     mutate(first = 1972,
+  #            second = coalesce(y2008, y2009),
+  #            third = coalesce(y2024, y2025)) |>
+  #     select(summit, first, second, third)
+  # ),
+  # tar_target(
+  #   name = elevation_species,
+  #   command = filefjell_data_clean |>
+  #     select(!c(date, recorder)) |>
+  #     pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |>
+  #     left_join(filefjell_visit_years, by = "summit") |>
+  #     mutate(third = ifelse(!is.na(y2025), 2025, third),
+  #            distance1 = y1972,
+  #            distance2 = coalesce(y2008, y2009),
+  #            distance3 = coalesce(y2024, y2025)) |>
+  #     select(!c(y1972, y2008, y2009, y2024, y2025)) |>
+  #     mutate(period1 = second - first,
+  #            period2 = third - second)
+  # ),
+  # tar_target(
+  #   name = elevation_species_new,
+  #   command = elevation_species |> 
+  #     mutate(adj_dist1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
+  #            adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2))
+  # ),
+  # tar_target(
+  #   name = elerate_all,
+  #   command = elevation_species |>
+  #     mutate(change1 = distance1 - distance2, 
+  #            change2 = distance2 - distance3) |> 
+  #     filter(!is.na(change1) & !is.na(change2)) |>
+  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  #     mutate(period = as.factor(period)) |>
+  #     mutate(change = case_when(period == "period1" ~ change1,
+  #                               period == "period2" ~ change2)) |>
+  #     mutate(rate = change / years) |>
+  #     select(!c(change1, change2))
+  # ),
+  # tar_target(
+  #   name = elerate_new,
+  #   command = elevation_species_new |>
+  #     mutate(change1 = adj_dist1 - adj_dist2, 
+  #            change2 = adj_dist2 - distance3) |> 
+  #     filter(!is.na(change1) & !is.na(change2)) |>
+  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  #     mutate(period = as.factor(period)) |>
+  #     mutate(change = case_when(period == "period1" ~ change1,
+  #                               period == "period2" ~ change2)) |>
+  #     mutate(rate = change / years) |>
+  #     select(!c(change1, change2))
+  # ),
   # tar_target(
   #   name = elevation_change_rate_three_mod,
   #   command = glmmTMB(
@@ -264,16 +277,16 @@ list(
   #     family = gaussian, 
   #     data = elevation_change_three_data)
   # ),
-  tar_target(
-    name = elerate_new_bayes,
-    command = brm(
-      bf(rate ~ 
-           period + (1|summit) + (1|species),
-         sigma ~ period),
-      family = student(), 
-      data = elerate_new,
-      seed = 811)
-  )
+  # tar_target(
+  #   name = elerate_new_bayes,
+  #   command = brm(
+  #     bf(rate ~ 
+  #          period + (1|summit) + (1|species),
+  #        sigma ~ period),
+  #     family = student(), 
+  #     data = elerate_new,
+  #     seed = 811)
+  # )
   # # Richness----
   # tar_target(
   #   name = richness_data,
