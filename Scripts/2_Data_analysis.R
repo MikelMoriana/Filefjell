@@ -22,7 +22,7 @@ filefjell_visit_years <- filefjell_data_clean |>
 
 ## Distance
 
-elevation_species <- filefjell_data_clean |> 
+filefjell_wide <- filefjell_data_clean |> 
   select(!c(date, recorder)) |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |> 
   left_join(filefjell_visit_years, by = "summit") |> 
@@ -34,14 +34,28 @@ elevation_species <- filefjell_data_clean |>
   mutate(period1 = second - first, 
          period2 = third - second)
 
-elevation_species_new <- elevation_species |> 
+filefjell_wide_new <- filefjell_wide |> 
   mutate(adj_dist1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
-         adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2))
+         adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2),
+         adj_dist3 = ifelse(is.na(distance3) & is.na(distance1) & !is.na(distance2), 33, distance3))
+# If a species appeared we assume it was right below the limit the previous survey. If a species disappeared, and it was new the previous survey, we assume it has gone back to right below the limit
 
-# As we are using change, we decide to use change in elevation instead of change in distance, since it is more intuitive (we subtract the value the first year from the value the second year)
+# We have distance to the top as variable, which lets us compare mountains of different elevations. But since we are using change, we decide to use change in altitude instead of change in distance, since it is more intuitive: a positive value means the species grows higher up the summit (we subtract the value the first year from the value the second year)
+
+# Considering only species for which we have data (present two sampling times in a row)
+elerate_all <- filefjell_wide |>
+  mutate(change1 = distance1 - distance2, 
+         change2 = distance2 - distance3) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  mutate(period = as.factor(period)) |>
+  mutate(change = case_when(period == "period1" ~ change1,
+                            period == "period2" ~ change2)) |>
+  filter(!is.na(change)) |> 
+  mutate(rate = change / years)
+
 
 # Considering only species found all years at a summit
-elerate_all <- elevation_species |>
+elerate_remained <- filefjell_wide |>
   mutate(change1 = distance1 - distance2, 
          change2 = distance2 - distance3) |> 
   filter(!is.na(change1) & !is.na(change2)) |>
@@ -53,7 +67,7 @@ elerate_all <- elevation_species |>
   select(!c(change1, change2))
 
 # Considering also new species, giving them a conservative value of 33 metres below the top
-elerate_new <- elevation_species_new |>
+elerate_new <- filefjell_wide_new |>
   mutate(change1 = adj_dist1 - adj_dist2, 
          change2 = adj_dist2 - distance3) |> 
   filter(!is.na(change1) & !is.na(change2)) |>
@@ -67,7 +81,7 @@ elerate_new <- elevation_species_new |>
 
 ## Turnover and richness
 
-turnover_species <- elevation_species |>
+turnover_species <- filefjell_wide |>
   mutate(presence1 = ifelse(is.na(distance1), 0, 1),
          presence2 = ifelse(is.na(distance2), 0, 1),
          presence3 = ifelse(is.na(distance3), 0, 1)) |>
@@ -91,10 +105,22 @@ turnover_summit <- turnover_species |>
 
 
 
-# # New species by nature type
-# 
-# filefjell_2024_clean <- tar_read(filefjell_2024_clean)
-# 
+# New species by area
+
+summit_data <- tar_read(filefjell_summit_data_tidy)
+
+summit_area <- turnover_status |> 
+  left_join(summit_data, by = c("summit", "elevation"))
+summit_area_new <- summit_area |> 
+  summarise(.by = c(elevation, area, bedrock, development), 
+            total = n())
+
+
+
+# New species by nature type
+
+filefjell_2024_clean <- tar_read(filefjell_2024_clean)
+
 # colonizers_data <- filefjell_2024_clean |> 
 #   semi_join(
 #     turnover_species_data |> 
@@ -129,7 +155,7 @@ turnover_summit <- turnover_species |>
 
 
 
-# Elevation change - Only species present all years----
+# Elevation change - Only species we have data for----
 
 ## Model
 
@@ -166,7 +192,7 @@ elerate_all_tbayes <- brm(
   seed = 811)
 withr::with_seed(811, pp_check(elerate_all_tbayes, type = "dens_overlay")) # Some extreme values 
 
-loo(elerate_all_gbayes, elerate_all_tbayes) # It seems student t is better, we have to fix the range
+loo(elerate_all_gbayes, elerate_all_tbayes) # It seems student t is better, we have to fix the priors to our expectations
 # I have also tried beta (using 32 as maximum possible change), but doesn't really fit
 
 elerate_all_tbayesp <- brm(
@@ -177,7 +203,7 @@ elerate_all_tbayesp <- brm(
     prior(normal(0, 0.5), class = "b"),
     prior(normal(0, 0.5), class = "Intercept"),
     prior(student_t(3, 0, 0.3), class = "sigma"),
-    prior(gamma(55, 1), class = "nu")
+    prior(gamma(70, 1), class = "nu")
     ),
   data = elerate_all,
   seed = 811
@@ -197,14 +223,14 @@ elerate_all_tbayesp |> plot() # hairy caterpillars
 withr::with_seed(811, pp_check(elerate_all_tbayesp, type = "dens_overlay"))
 
 # Residuals
-elerate_all_bayes_res <- tibble(
+elerate_bayes_res <- tibble(
   fitted = fitted(elerate_all_tbayesp)[, "Estimate"],
   residuals = residuals(elerate_all_tbayesp)[, "Estimate"],
   period = elerate_all$period,
   summit = elerate_all$summit,
   species = elerate_all$species
 )
-ggplot(elerate_all_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
+ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
   labs(
@@ -214,7 +240,7 @@ ggplot(elerate_all_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
   ) +
   theme_minimal()
 
-# It seems there is heteroskedasticity, with period 2 having greater variance
+# It seems there might be some heteroskedasticity, with period 2 having greater variance
 pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
 
 
@@ -229,12 +255,14 @@ elerate_all_bayesh <- brm(
   prior = c(
     prior(normal(0, 0.5), class = "b"),
     prior(normal(0, 0.5), class = "Intercept"),
-    prior(gamma(55, 1), class = "nu")
+    prior(gamma(45, 1), class = "nu")
   ),
   data = elerate_all,
-  seed = 811,
-  control = list(adapt_delta = 0.99))
-
+  control = list(adapt_delta = 0.99),
+  seed = 811
+  )
+loo(elerate_all_tbayesp, elerate_all_bayesh)
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay", size = 1))
 
 ## Diagnosis
 
@@ -263,9 +291,7 @@ ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
   ) +
   theme_minimal()
 # Maybe more variance in period 2, but it looks quite good
-pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period") # The distributions fit relatively well (though both miss the bump on the right)
-
-loo(elerate_all_tbayesp, elerate_all_bayesh) # Large difference
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
 
 # Random effect structure
 elerate_all_bayesh |> ranef()
@@ -290,52 +316,42 @@ elerate_all_results <- elerate_all_bayesh |>
 
 
 
-# Elevation change Including new species----
+# Elevation change. Only species present all years----
 
-### Model
-
-elerate_new |> 
-  ggplot() +
-  geom_histogram(aes(x = rate))
-
-elerate_new_mod <- glmmTMB(
-  rate ~ 
-    period + (1 | summit) + (1 | species), 
-  family = t_family,
-  data = elerate_new)
-
-elerate_new_mod |> model_diagnosis()
-elerate_new_mod |> model_homoscedasticity()
-elerate_new_mod |> summary()
-
-# No distributions I try get close to fitting. I try bayesian
-
-elerate_new_bayes <- brm(
-  rate ~ 
-    period + (1|summit) + (1|species),
+elerate_rem_bayesh <- brm(
+  bf(rate ~ 
+       period + (1|summit) + (1|species),
+     sigma ~period),
   family = student(), 
-  data = elerate_new,
-  seed = 811)
-
+  prior = c(
+    prior(normal(0, 0.5), class = "b"),
+    prior(normal(0, 0.5), class = "Intercept"),
+    prior(gamma(50, 1), class = "nu")
+  ),
+  data = elerate_remained,
+  control = list(adapt_delta = 0.999),
+  seed = 811
+)
 
 ## Diagnosis
 
 # Model convergence and sample quality
-elerate_new_bayes |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
-elerate_new_bayes |> plot() # hairy caterpillars
+elerate_rem_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_rem_bayesh |> plot() # hairy caterpillars
 
 # Posterior predictive check
-withr::with_seed(811, pp_check(elerate_new_bayes, type = "dens_overlay")) # Correct range, but misses the slight bump on the positive side
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay", size = 2)) # The range is slightly too wide. I continue, and see afterwards what to adjust
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", size = 2, group = "period"))
 
 # Residuals
-elerate_new_bayes_res <- tibble(
-  fitted = fitted(elerate_new_bayes)[, "Estimate"],
-  residuals = residuals(elerate_new_bayes)[, "Estimate"],
-  period = elerate_new$period,
-  summit = elerate_new$summit,
-  species = elerate_new$species
+elerate_rem_bayesh_res <- tibble(
+  fitted = fitted(elerate_rem_bayesh)[, "Estimate"],
+  residuals = residuals(elerate_rem_bayesh)[, "Estimate"],
+  period = elerate_remained$period,
+  summit = elerate_remained$summit,
+  species = elerate_remained$species
 )
-ggplot(elerate_new_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
+ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
   labs(
@@ -344,21 +360,50 @@ ggplot(elerate_new_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
-# It seems there is heteroskedasticity, with period 1 having greater variance
-pp_check(elerate_new_bayes, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
+# Maybe more variance in period 2, but it looks quite good
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
+
+# Random effect structure
+elerate_rem_bayesh |> ranef()
+elerate_rem_bayesh |> VarCorr()
+elerate_rem_bayesh |> bayes_R2()
+
+# Outliers
+elerate_rem_bayesh |> loo() # No influential points
+
+# Summary
+elerate_rem_bayesh |> summary()
+
+elerate_rem_results <- elerate_rem_bayesh |> 
+  emmeans( ~ period) |> 
+  tidy(conf.int = TRUE) |> 
+  clean_names() |> 
+  rename(conf_low = lower_hpd,
+         conf_high = upper_hpd) |> 
+  mutate(model = "elevation") |> 
+  relocate(model)
 
 
 
-### Model 2
+
+# Elevation change Including new species----
 
 elerate_new_bayesh <- brm(
   bf(rate ~ 
-    period + (1|summit) + (1|species),
-    sigma ~ period),
+       period + (1|summit) + (1|species),
+     sigma ~period),
   family = student(), 
+  # prior = c(
+  #   prior(normal(0, 0.5), class = "b"),
+  #   prior(normal(0, 0.5), class = "Intercept"),
+  #   prior(gamma(3, 1), class = "nu")
+  # ),
   data = elerate_new,
-  seed = 811)
-loo(elerate_new_bayes, elerate_new_bayesh) # The new model is more complex, but better
+  control = list(adapt_delta = 0.999),
+  seed = 811
+) # 12, 9, 6, 3
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) 
+
 
 ## Diagnosis
 
@@ -408,37 +453,6 @@ elerate_new_results <- elerate_new_bayesh |>
          conf_high = upper_hpd) |> 
   mutate(model = "elevation") |> 
   relocate(model)
-
-
-# ## Species found either in 1972 and 2009, or 2009 and 2024
-# 
-# hist(elevation_change_two_data$elevation_change_rate)
-# 
-# elevation_change_two_rate_mod <- glmmTMB(
-#   elevation_change_rate ~ 
-#     period + (1 | summit) + (1 | species), 
-#   family = gaussian, 
-#   data = elevation_change_two_data)
-# 
-# # elevation_change_two_rate_mod |> model_diagnosis()
-# # elevation_change_two_rate_mod |> model_homoscedasticity()
-# elevation_change_two_rate_mod |> summary()
-# 
-# elevation_two_results <- elevation_change_two_rate_mod |> 
-#   ggpredict(terms = "period") |> 
-#   rename(period = x) |> 
-#   as.data.frame() |> 
-#   mutate(model = "elevation") |> 
-#   relocate(model)
-# 
-# test_elevation_two <- elevation_change_two_data |> 
-#   mutate(period = factor(period, level = c("period2", "period1")))
-# test_elevation_two_mod <- glmmTMB(
-#   elevation_change_rate ~ 
-#     period + (1 | summit) + (1 | species), 
-#   family = gaussian, 
-#   data = test_elevation_two)
-# test_elevation_two_mod |> summary()
 
 
 
@@ -576,7 +590,7 @@ turlost_results <- turlost_mod |>
 
 # Turnover original species----
 
-turnover_status <- elevation_species |> 
+turnover_status <- filefjell_wide |> 
   mutate(presence1 = ifelse(!is.na(distance1), 1, 0), 
          presence2 = ifelse(!is.na(distance2), 1, 0), 
          presence3 = ifelse(!is.na(distance3), 1, 0),
@@ -590,13 +604,37 @@ turnover_status <- elevation_species |>
                                  turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
                                  turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
                                  turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
-                                 turnover1 == -1 & turnover2 == -1 ~ "Error")) |> 
+                                 turnover1 == -1 & turnover2 == -1 ~ "Error"))
+turnover_grouped <- turnover_status |> 
   summarise(.by = "development", total = n())
 
 # 341 Remained
 # 7 Disappeared1 | 14 Disappeared2
 # 14 Back_forth | 57 Forth_back
 # 225 Appeared1 | 118 Appeared2
+
+turnover_status_long <- turnover_status |> 
+  pivot_longer(cols = c(distance1, distance2, distance3), names_to = "measurement", values_to = "distance") |> 
+  select(!c(first:turnover2)) |> 
+  filter(!is.na(distance)) |> 
+  mutate(altitude = (-1)*distance + 32,
+         development = factor(development, levels = c("Forth_back", "Disappeared2", "Disappeared1", "Back_forth", "Appeared1", "Appeared2", "Remained")))
+
+turnover_status_long |> ggplot() + geom_histogram(aes(x = distance))
+
+turdev_mod <- glmmTMB(
+  distance ~ development,
+  family = gaussian(),
+  dispformula = ~development,
+  data = turnover_status_long)
+turdev_mod |> model_diagnosis()
+turdev_mod |> summary()
+
+turnover_status_long |> 
+  ggplot() +
+  geom_boxplot(aes(x = development, y = distance)) +
+  scale_y_reverse() +
+  facet_grid(rows = vars(measurement))
 
 
 
@@ -639,9 +677,38 @@ results_graph <- results_table |>
 results_graph
 results_graph |> ggsave(file = "Results/Rate_of_change.png", width = 20, height = 15, units = "cm")
 
-# 
-# 
-# 
+
+
+# New_species ~ ...----
+
+summit_area_new |> ggplot() + geom_point(aes(x = area, y = total)) + facet_wrap(~development)
+summit_area_new |> ggplot() + geom_point(aes(x = elevation, y = total)) + facet_wrap(~development)
+
+app1_area_mod <- glmmTMB(
+  total ~ area,
+  data = summit_area_new |> filter(development == "Appeared1")
+)
+app1_area_mod |> summary()
+
+app2_area_mod <- glmmTMB(
+  total ~ area,
+  data = summit_area_new |> filter(development == "Appeared2")
+)
+app2_area_mod |> summary()
+
+baf_area_mod <- glmmTMB(
+  total ~ area,
+  data = summit_area_new |> filter(development == "Back_forth")
+)
+baf_area_mod |> summary()
+
+fab_area_mod <- glmmTMB(
+  total ~ area,
+  data = summit_area_new |> filter(development == "Forth_back")
+)
+fab_area_mod |> summary()
+
+
 # # Colonizers. When doing this analysis consider whether species present in 1972 (that disappeared in 2010) should be taken into account ----
 # 
 # ## Total
