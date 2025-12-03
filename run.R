@@ -47,32 +47,34 @@ manual_positions <- tribble(
   "filefjell_2024_2025_clean",      800,    100,
   "filefjell_data_clean",          1000,      0,
   
-  # Elevation change
-  "filefjell_visit_years",         1100,   -100,
-  "elevation_species",             1200,      0,
-  "species_turnover_data",          150,   -100,
+  # Datasets for analyses
+  "filefjell_visit_years",         1100,    100,
+  "filefjell_wide",                1200,      0,
+  "filefjell_wide_new",            1400,    250,
+  "turnover_species",              1400,   -175,
   
-  "elerate_all",                   1400,   -100,
-  "elevation_species_new",         1300,    100,
-  "elerate_new",                   1400,     0,
-  "elerate_new_bayes",             1600,     0
-  # # 8
-  # "richness_change_rate_mod",         0,   -100,
-  # "lost_rate_mod",                  100,   -100,
-  # "new_rate_mod",                   200,   -100,
-  # # Others
-  # "adj_label",                      200,   -100,
-  # "colour_mapping",                 300,   -100,
-  # "gg_modvars",                     200,   -100,
-  # "gg_yearline",                    300,   -100,
-  # "model_ch_factors",               400,   -100,
-  # "model_diagnosis",                500,   -100,
-  # "model_distribution",             600,   -100,
-  # "model_factors",                  700,   -100,
-  # "model_homoscedasticity",         800,   -100,
-  # "optimizer",                      900,   -100,
-  # "remove_terms",                  1000,   -100,
-  # "frequency_nmds_var",            1100,   -100
+  # Elevation change
+  "elerate_all",                   1600,     50,
+  "elerate_all_bayes",             1800,     50,
+  "elerate_all_results",           2000,     50,
+  "elerate_remained",              1600,    150,
+  "elerate_rem_bayes",             1800,    150,
+  "elerate_rem_results",           2000,    150,
+  "elerate_new",                   1600,    250,
+  "elerate_new_bayes",             1800,    250,
+  "elerate_new_results",           2000,    250,
+  
+  # Richness rate
+  "richness_rate",                 1600,   -250,
+  "richrate_mod",                  1800,   -250,
+  "richrate_results",              2000,   -250,
+  
+  # Turnover
+  "turnover_summit",               1600,   -100,
+  "turnew_mod",                    1800,   -150,
+  "turnew_results",                2000,   -150,
+  "turlost_mod",                   1800,    -50,
+  "turlost_results",               2000,    -50,
 )
 
 nodes <- vis_data$x$nodes |> 
