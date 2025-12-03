@@ -20,7 +20,7 @@ filefjell_visit_years <- filefjell_data_clean |>
   select(summit, first, second, third)
 
 
-## Distance
+## Distance----
 
 filefjell_wide <- filefjell_data_clean |> 
   select(!c(date, recorder)) |> 
@@ -79,23 +79,36 @@ elerate_new <- filefjell_wide_new |>
   select(!c(change1, change2))
 
 
-## Turnover and richness
+## Turnover----
 
 turnover_species <- filefjell_wide |>
   mutate(presence1 = ifelse(is.na(distance1), 0, 1),
          presence2 = ifelse(is.na(distance2), 0, 1),
-         presence3 = ifelse(is.na(distance3), 0, 1)) |>
-  select(!c(distance1, distance2, distance3)) |> 
-  mutate(turnover1 = presence2 - presence1,
-         turnover2 = presence3 - presence2) |> 
+         presence3 = ifelse(is.na(distance3), 0, 1),
+         turnover1 = presence2 - presence1,
+         turnover2 = presence3 - presence2,
+         development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
+                                 turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
+                                 turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
+                                 turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
+                                 turnover1 == 0 & turnover2 == 0 ~ "Remained",
+                                 turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
+                                 turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
+                                 turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
+                                 turnover1 == -1 & turnover2 == -1 ~ "Error")) |>
+  relocate(development, .after = category) |> 
   mutate(rate1 = turnover1 / period1,
          rate2 = turnover2 / period2) |> 
   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
   mutate(period = as.factor(period)) |> 
   mutate(rate = ifelse(period == "period1", rate1, rate2))
 
-richness_rate <- turnover_species |> 
-  summarise(.by = c(summit, period), rate = sum(rate))
+turnover_grouped <- turnover_species |> 
+  summarise(.by = c("category", "development"), total = n() / 2) |> # Divide by two since for each species we have two rows, one per period
+  arrange(development)
+
+
+# By summit
 
 turnover_summit <- turnover_species |> 
   summarise(.by = c(summit, period), 
@@ -103,21 +116,40 @@ turnover_summit <- turnover_species |>
             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
 
+turnover_summit_tourist <- turnover_species |> 
+  filter(development %in% c("Forth_back", "Back_forth")) |> 
+  summarise(.by = c(summit, period), 
+            new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
+            nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
+            lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+
+turnover_summit_nontourist <- turnover_species |> 
+  filter(!(development %in% c("Forth_back", "Back_forth"))) |> 
+  summarise(.by = c(summit, period), 
+            new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
+            nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
+            lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+
+
+## Richness----
+
+richness_rate <- turnover_species |> 
+  summarise(.by = c(summit, period), rate = sum(rate))
 
 
 # New species by area
 
 summit_data <- tar_read(filefjell_summit_data_tidy)
 
-summit_area <- turnover_status |> 
+turnover_area <- turnover_species |> 
   left_join(summit_data, by = c("summit", "elevation"))
-summit_area_new <- summit_area |> 
+turnover_area_grouped <- turnover_area |> 
   summarise(.by = c(elevation, area, bedrock, development), 
             total = n())
 
 
 
-# New species by nature type
+## Nature type----
 
 filefjell_2024_clean <- tar_read(filefjell_2024_clean)
 
@@ -392,16 +424,11 @@ elerate_new_bayesh <- brm(
   bf(rate ~ 
        period + (1|summit) + (1|species),
      sigma ~period),
-  family = student(), 
-  # prior = c(
-  #   prior(normal(0, 0.5), class = "b"),
-  #   prior(normal(0, 0.5), class = "Intercept"),
-  #   prior(gamma(3, 1), class = "nu")
-  # ),
+  family = student(),
   data = elerate_new,
   control = list(adapt_delta = 0.999),
   seed = 811
-) # 12, 9, 6, 3
+)
 withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) 
 
 
@@ -459,7 +486,7 @@ elerate_new_results <- elerate_new_bayesh |>
 
 # Richness change----
 
-## Exploratoy graphs
+## Exploratory graphs
 
 richness_rate |>
   ggplot(aes(x = period, y = rate)) +
@@ -488,7 +515,7 @@ richness_rate |>
 
 richrate_mod <- glmmTMB(
   rate ~
-    period,
+    period + (1 | summit),
   family = gaussian,
   data = richness_rate)
 
@@ -528,7 +555,7 @@ turnover_summit |>
 
 turnew_mod <- glmmTMB(
   new ~
-    period,
+    period + (1 | summit),
   family = gaussian,
   data = turnover_summit)
 
@@ -558,7 +585,7 @@ turnover_summit |>
 
 turlost_mod <- glmmTMB(
   lost ~
-    period,
+    period + (1 | summit),
   family = gaussian,
   data = turnover_summit)
 
@@ -568,7 +595,7 @@ turlost_mod |> summary()
 
 turlost_modh <- glmmTMB(
   lost ~
-    period,
+    period + (1 | summit),
   dispformula = ~period,
   family = gaussian,
   data = turnover_summit)
@@ -588,45 +615,38 @@ turlost_results <- turlost_mod |>
 
 
 
+
 # Turnover original species----
 
-turnover_status <- filefjell_wide |> 
-  mutate(presence1 = ifelse(!is.na(distance1), 1, 0), 
-         presence2 = ifelse(!is.na(distance2), 1, 0), 
-         presence3 = ifelse(!is.na(distance3), 1, 0),
-         turnover1 = presence2 - presence1,
-         turnover2 = presence3 - presence2,
-         development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
-                                 turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
-                                 turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
-                                 turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
-                                 turnover1 == 0 & turnover2 == 0 ~ "Remained",
-                                 turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
-                                 turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
-                                 turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
-                                 turnover1 == -1 & turnover2 == -1 ~ "Error"))
-turnover_grouped <- turnover_status |> 
-  summarise(.by = "development", total = n())
+turnover_grouped |> 
+  pivot_wider(names_from = category, values_from = total)
+# development  generalist alpine
+# Remained            118    223
+# Appeared1           109    116
+# Appeared2            69     49
+# Disappeared1          6      1
+# Disappeared2          4     10
+# Forth_back           36     21
+# Back_forth            4     10
 
-# 341 Remained
-# 7 Disappeared1 | 14 Disappeared2
-# 14 Back_forth | 57 Forth_back
-# 225 Appeared1 | 118 Appeared2
-
-turnover_status_long <- turnover_status |> 
+turnover_status <- turnover_species |> 
+  select(!c(incline:third, presence1:rate)) |> 
+  distinct() |> 
   pivot_longer(cols = c(distance1, distance2, distance3), names_to = "measurement", values_to = "distance") |> 
-  select(!c(first:turnover2)) |> 
   filter(!is.na(distance)) |> 
   mutate(altitude = (-1)*distance + 32,
          development = factor(development, levels = c("Forth_back", "Disappeared2", "Disappeared1", "Back_forth", "Appeared1", "Appeared2", "Remained")))
 
-turnover_status_long |> ggplot() + geom_histogram(aes(x = distance))
+turnover_status |> 
+  ggplot() + 
+  geom_histogram(aes(x = (distance+0.025) / 32.05))
 
 turdev_mod <- glmmTMB(
-  distance ~ development,
-  family = gaussian(),
+  (distance+0.025) / 32.05 ~ 
+    development,
+  family = beta_family(),
   dispformula = ~development,
-  data = turnover_status_long)
+  data = turnover_status)
 turdev_mod |> model_diagnosis()
 turdev_mod |> summary()
 
