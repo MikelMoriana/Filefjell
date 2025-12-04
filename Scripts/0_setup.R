@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "glmmTMB", "DHARMa", "emmeans", "brms","broom.mixed", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "brms","broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -75,10 +75,16 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
   return(plot)
 }
 
-adj_label <- c("elevation" = "<b>a)</b> Altitude<br>change", "richness" = "<b>b)</b> Richness<br>change", "new" = "<b>c)</b> New species", "lost" = "<b>d)</b> Lost species")
+adj_label <- c("richness" = "<b>a)</b> Species<br>richness", 
+               "new" = "<b>b)</b> New species", 
+               "lost" = "<b>c)</b> Lost species", 
+               "elevation" = "<b>d)</b> Species<br>altitude",
+               "alpine" = "Alpine",
+               "generalist" = "Generalist")
 
 colour_mapping <-  list(
-  period = c("period1" = "#859395", "period2" = "#f58800")
+  period = c("period1" = "#859395", "period2" = "#f58800"),
+  category = c("alpine" = "#859395", "generalist" = "#f58800")
 )
 
 
