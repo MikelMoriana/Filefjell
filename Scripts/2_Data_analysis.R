@@ -197,7 +197,7 @@ elerate_all |>
 
 elerate_all_mod <- glmmTMB(
   rate ~ 
-    period + (1 | summit) + (1 | species), 
+    period * category + (1 | summit) + (1 | species), 
   family = gaussian, 
   data = elerate_all)
 
@@ -210,7 +210,7 @@ elerate_all_mod |> summary()
 
 elerate_all_gbayes <- brm(
   rate ~ 
-    period + (1|summit) + (1|species),
+    period * category + (1|summit) + (1|species),
   family = gaussian(), 
   data = elerate_all,
   seed = 811)
@@ -218,28 +218,29 @@ withr::with_seed(811, pp_check(elerate_all_gbayes, type = "dens_overlay")) # The
 
 elerate_all_tbayes <- brm(
   rate ~ 
-    period + (1|summit) + (1|species),
+    period * category + (1|summit) + (1|species),
   family = student(), 
   data = elerate_all,
   seed = 811)
 withr::with_seed(811, pp_check(elerate_all_tbayes, type = "dens_overlay")) # Some extreme values 
 
 loo(elerate_all_gbayes, elerate_all_tbayes) # It seems student t is better, we have to fix the priors to our expectations
-# I have also tried beta (using 32 as maximum possible change), but doesn't really fit
+# I have also tried beta (using 32 as maximum possible change), but doesn't really fit (not good for a peak)
 
 elerate_all_tbayesp <- brm(
   rate ~ 
-    period + (1 | summit) + (1 | species), 
+    period * category + (1 | summit) + (1 | species), 
   family = student(), 
   prior = c(
     prior(normal(0, 0.5), class = "b"),
     prior(normal(0, 0.5), class = "Intercept"),
     prior(student_t(3, 0, 0.3), class = "sigma"),
-    prior(gamma(70, 1), class = "nu")
+    prior(gamma(80, 1), class = "nu")
     ),
+  control = list(adapt_delta = 0.999),
   data = elerate_all,
   seed = 811
-)
+) # 65, 70, 75, 80, 85
 withr::with_seed(811, pp_check(elerate_all_tbayesp, type = "dens_overlay", size = 2))
 
 loo(elerate_all_tbayes, elerate_all_tbayesp) # The one without priors seems slightly better, but the posterior distribution doesn't match, we keep use priors
@@ -259,6 +260,7 @@ elerate_bayes_res <- tibble(
   fitted = fitted(elerate_all_tbayesp)[, "Estimate"],
   residuals = residuals(elerate_all_tbayesp)[, "Estimate"],
   period = elerate_all$period,
+  category = elerate_all$category,
   summit = elerate_all$summit,
   species = elerate_all$species
 )
@@ -271,9 +273,19 @@ ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
+ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = category)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
 
 # It seems there might be some heteroskedasticity, with period 2 having greater variance
 pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
+pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "category") # Quite similar
 
 
 
@@ -281,20 +293,20 @@ pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "period") #
 
 elerate_all_bayesh <- brm(
   bf(rate ~ 
-    period + (1|summit) + (1|species),
+    period * category + (1|summit) + (1|species),
     sigma ~period),
   family = student(), 
   prior = c(
     prior(normal(0, 0.5), class = "b"),
     prior(normal(0, 0.5), class = "Intercept"),
-    prior(gamma(45, 1), class = "nu")
+    prior(gamma(46, 1), class = "nu")
   ),
   data = elerate_all,
-  control = list(adapt_delta = 0.99),
+  control = list(adapt_delta = 0.999),
   seed = 811
   )
-loo(elerate_all_tbayesp, elerate_all_bayesh)
 withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay", size = 1))
+loo(elerate_all_tbayesp, elerate_all_bayesh)
 
 ## Diagnosis
 
@@ -310,6 +322,7 @@ elerate_all_bayesh_res <- tibble(
   fitted = fitted(elerate_all_bayesh)[, "Estimate"],
   residuals = residuals(elerate_all_bayesh)[, "Estimate"],
   period = elerate_all$period,
+  category = elerate_all$category,
   summit = elerate_all$summit,
   species = elerate_all$species
 )
@@ -325,6 +338,18 @@ ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
 # Maybe more variance in period 2, but it looks quite good
 withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
 
+
+ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = category)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "category"))
+
 # Random effect structure
 elerate_all_bayesh |> ranef()
 elerate_all_bayesh |> VarCorr()
@@ -337,7 +362,7 @@ elerate_all_bayesh |> loo() # No influential points
 elerate_all_bayesh |> summary()
 
 elerate_all_results <- elerate_all_bayesh |> 
-  emmeans( ~ period) |> 
+  emmeans( ~ period * category) |> 
   tidy(conf.int = TRUE) |> 
   clean_names() |> 
   rename(conf_low = lower_hpd,
@@ -352,13 +377,13 @@ elerate_all_results <- elerate_all_bayesh |>
 
 elerate_rem_bayesh <- brm(
   bf(rate ~ 
-       period + (1|summit) + (1|species),
+       period * category + (1|summit) + (1|species),
      sigma ~period),
   family = student(), 
   prior = c(
     prior(normal(0, 0.5), class = "b"),
     prior(normal(0, 0.5), class = "Intercept"),
-    prior(gamma(50, 1), class = "nu")
+    prior(gamma(45, 1), class = "nu")
   ),
   data = elerate_remained,
   control = list(adapt_delta = 0.999),
@@ -373,13 +398,13 @@ elerate_rem_bayesh |> plot() # hairy caterpillars
 
 # Posterior predictive check
 withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay", size = 2)) # The range is slightly too wide. I continue, and see afterwards what to adjust
-withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", size = 2, group = "period"))
 
 # Residuals
 elerate_rem_bayesh_res <- tibble(
   fitted = fitted(elerate_rem_bayesh)[, "Estimate"],
   residuals = residuals(elerate_rem_bayesh)[, "Estimate"],
   period = elerate_remained$period,
+  category = elerate_remained$category,
   summit = elerate_remained$summit,
   species = elerate_remained$species
 )
@@ -393,7 +418,19 @@ ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
   ) +
   theme_minimal()
 # Maybe more variance in period 2, but it looks quite good
-withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "period"))
+
+ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = category)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+# Maybe more variance in period 2, but it looks quite good
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "category"))
 
 # Random effect structure
 elerate_rem_bayesh |> ranef()
@@ -407,7 +444,7 @@ elerate_rem_bayesh |> loo() # No influential points
 elerate_rem_bayesh |> summary()
 
 elerate_rem_results <- elerate_rem_bayesh |> 
-  emmeans( ~ period) |> 
+  emmeans( ~ period * category) |> 
   tidy(conf.int = TRUE) |> 
   clean_names() |> 
   rename(conf_low = lower_hpd,
@@ -422,7 +459,7 @@ elerate_rem_results <- elerate_rem_bayesh |>
 
 elerate_new_bayesh <- brm(
   bf(rate ~ 
-       period + (1|summit) + (1|species),
+       period * category + (1|summit) + (1|species),
      sigma ~period),
   family = student(),
   data = elerate_new,
@@ -446,6 +483,7 @@ elerate_new_bayesh_res <- tibble(
   fitted = fitted(elerate_new_bayesh)[, "Estimate"],
   residuals = residuals(elerate_new_bayesh)[, "Estimate"],
   period = elerate_new$period,
+  category = elerate_new$category,
   summit = elerate_new$summit,
   species = elerate_new$species
 )
@@ -458,8 +496,19 @@ ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
-# It seems there is still heteroskedasticity, with period 1 having greater variance
-withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "period")) # Still some heteroskedasticity, but the distributions fit better
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "period")) # Some heteroskedasticity, but doesn't look that bad
+
+
+ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = category)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "category"))
 
 # Random effect structure
 elerate_new_bayesh |> ranef()
@@ -473,7 +522,7 @@ elerate_new_bayesh |> loo() # No influential points
 elerate_new_bayesh |> summary()
 
 elerate_new_results <- elerate_new_bayesh |> 
-  emmeans( ~ period) |> 
+  emmeans( ~ period * category) |> 
   tidy(conf.int = TRUE) |> 
   clean_names() |> 
   rename(conf_low = lower_hpd,
