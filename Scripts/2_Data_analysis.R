@@ -111,7 +111,7 @@ turnover_grouped <- turnover_species |>
 # By summit
 
 turnover_summit <- turnover_species |> 
-  summarise(.by = c(summit, period), 
+  summarise(.by = c(summit, period, category), 
             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
@@ -134,7 +134,7 @@ turnover_summit_nontourist <- turnover_species |>
 ## Richness----
 
 richness_rate <- turnover_species |> 
-  summarise(.by = c(summit, period), rate = sum(rate))
+  summarise(.by = c(summit, period, category), rate = sum(rate))
 
 
 # New species by area
@@ -184,6 +184,195 @@ filefjell_2024_clean <- tar_read(filefjell_2024_clean)
 
 # community_metadata <- community_presence |> select(year:summit)
 # community_species <- community_presence |> select(-c(year:summit))
+
+
+
+
+# Richness change----
+
+## Exploratory graphs
+
+richness_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin() +
+  labs(title = " elevations by Year",
+       x = "Year",
+       y = "Vertical elevation to Top (meters)") +
+  theme_minimal()
+
+richness_rate |>
+  ggplot(aes(x = summit:period, y = rate, color = summit)) +
+  geom_point() +
+  labs(title = "Plot of richness change per year",
+       x = "Year",
+       y = "Richness change (species/year)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
+
+
+## Modelling
+
+richness_rate |> 
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+richrate_mod <- glmmTMB(
+  rate ~
+    period * category + (1 | summit),
+  family = gaussian,
+  data = richness_rate)
+
+richrate_mod |> model_diagnosis() # No problems
+richrate_mod |> model_homoscedasticity() # No problems
+richrate_mod |> summary()
+
+richrate_modh <- glmmTMB(
+  rate ~
+    period * category + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = richness_rate)
+
+richrate_modh |> model_diagnosis() # No problems
+richrate_modh |> model_homoscedasticity() # No problems
+richrate_modh |> summary()
+
+richrate_results <- richrate_modh |>
+  emmeans( ~ period * category) |>
+  tidy(conf.int = TRUE) |> 
+  clean_names() |> 
+  select(period, category, estimate, conf_low, conf_high) |>
+  mutate(model = "richness") |> 
+  relocate(model)
+
+
+
+
+# Turnover----
+
+turnover_summit |>
+  summarise(.by = c(period, category),
+            new_mean = mean(new),
+            nochange_mean = mean(nochange),
+            lost_mean = mean(lost))
+
+
+# New species
+
+turnover_summit |>
+  ggplot(aes(x = period, y = new)) +
+  geom_violin()
+
+turnover_summit |> 
+  ggplot() +
+  geom_histogram(aes(x = new))
+
+turnew_mod <- glmmTMB(
+  new ~
+    period * category + (1 | summit),
+  family = gaussian,
+  data = turnover_summit)
+
+turnew_mod |> model_diagnosis() # No problems
+turnew_mod |> model_homoscedasticity() # No problems
+turnew_mod |> summary()
+
+turnew_results <- turnew_mod |>
+  emmeans( ~ period * category) |>
+  tidy(conf.int = TRUE) |> 
+  clean_names() |> 
+  select(period, category, estimate, conf_low, conf_high) |>
+  mutate(model = "new") |> 
+  relocate(model)
+# More new species in the second period, but not significantly
+
+
+# Lost species
+
+turnover_summit |>
+  ggplot(aes(x = period, y = lost)) +
+  geom_violin()
+
+turnover_summit |> 
+  ggplot() +
+  geom_histogram(aes(x = lost))
+
+turlost_mod <- glmmTMB(
+  lost ~
+    period * category + (1 | summit),
+  family = gaussian,
+  data = turnover_summit)
+
+turlost_mod |> model_diagnosis()
+turlost_mod |> model_homoscedasticity()
+turlost_mod |> summary()
+
+turlost_modh <- glmmTMB(
+  lost ~
+    period * category + (1 | summit),
+  dispformula = ~period*category, # complex, but helps with uniformity and both heteroskedasticities
+  family = gaussian,
+  data = turnover_summit)
+
+turlost_modh |> model_diagnosis() # no problems
+turlost_modh |> model_homoscedasticity() # No problems
+turlost_modh |> summary()
+# Greater species loss in the second period
+
+turlost_results <- turlost_mod |>
+  emmeans( ~ period * category) |>
+  tidy(conf.int = TRUE) |> 
+  clean_names() |> 
+  select(period, category, estimate, conf_low, conf_high) |>
+  mutate(model = "lost") |> 
+  relocate(model)
+
+
+
+
+# Turnover original species----
+
+turnover_grouped |> 
+  pivot_wider(names_from = category, values_from = total)
+# development  generalist alpine
+# Remained            118    223
+# Appeared1           109    116
+# Appeared2            69     49
+# Disappeared1          6      1
+# Disappeared2          4     10
+# Forth_back           36     21
+# Back_forth            4     10
+
+turnover_status <- turnover_species |> 
+  select(!c(incline:third, presence1:rate)) |> 
+  distinct() |> 
+  pivot_longer(cols = c(distance1, distance2, distance3), names_to = "measurement", values_to = "distance") |> 
+  filter(!is.na(distance)) |> 
+  mutate(altitude = (-1)*distance + 32,
+         development = factor(development, levels = c("Forth_back", "Disappeared2", "Disappeared1", "Back_forth", "Appeared1", "Appeared2", "Remained")))
+
+turnover_status |> 
+  ggplot() + 
+  geom_histogram(aes(x = (distance+0.025) / 32.05))
+
+turdev_mod <- glmmTMB(
+  (distance+0.025) / 32.05 ~ 
+    development,
+  family = beta_family(),
+  dispformula = ~development,
+  data = turnover_status)
+turdev_mod |> model_diagnosis()
+turdev_mod |> summary()
+
+turnover_status_long |> 
+  ggplot() +
+  geom_boxplot(aes(x = development, y = distance)) +
+  scale_y_reverse() +
+  facet_grid(rows = vars(measurement))
+
+
+
 
 
 
@@ -337,7 +526,6 @@ ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
   theme_minimal()
 # Maybe more variance in period 2, but it looks quite good
 withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
-
 
 ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = category)) +
   geom_point(size = 3) +
@@ -533,218 +721,44 @@ elerate_new_results <- elerate_new_bayesh |>
 
 
 
-# Richness change----
-
-## Exploratory graphs
-
-richness_rate |>
-  ggplot(aes(x = period, y = rate)) +
-  geom_violin() +
-  labs(title = " elevations by Year",
-       x = "Year",
-       y = "Vertical elevation to Top (meters)") +
-  theme_minimal()
-
-richness_rate |>
-  ggplot(aes(x = summit:period, y = rate, color = summit)) +
-  geom_point() +
-  labs(title = "Plot of richness change per year",
-       x = "Year",
-       y = "Richness change (species/year)") +
-  theme_minimal() +
-  theme(legend.position = "none")
-# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
-
-
-## Modelling
-
-richness_rate |> 
-  ggplot() +
-  geom_histogram(aes(x = rate))
-
-richrate_mod <- glmmTMB(
-  rate ~
-    period + (1 | summit),
-  family = gaussian,
-  data = richness_rate)
-
-richrate_mod |> model_diagnosis() # No problems
-richrate_mod |> model_homoscedasticity() # No problems
-richrate_mod |> summary()
-
-richrate_results <- richrate_mod |>
-  emmeans( ~ period) |>
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  select(period, estimate, conf_low, conf_high) |>
-  mutate(model = "richness") |> 
-  relocate(model)
-
-
-
-
-# Turnover----
-
-turnover_summit |>
-  summarise(.by = period,
-            new_mean = mean(new),
-            nochange_mean = mean(nochange),
-            lost_mean = mean(lost))
-
-
-# New species
-
-turnover_summit |>
-  ggplot(aes(x = period, y = new)) +
-  geom_violin()
-
-turnover_summit |> 
-  ggplot() +
-  geom_histogram(aes(x = new))
-
-turnew_mod <- glmmTMB(
-  new ~
-    period + (1 | summit),
-  family = gaussian,
-  data = turnover_summit)
-
-turnew_mod |> model_diagnosis() # No problems
-turnew_mod |> model_homoscedasticity() # No problems
-turnew_mod |> summary()
-
-turnew_results <- turnew_mod |>
-  emmeans( ~ period) |>
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  select(period, estimate, conf_low, conf_high) |>
-  mutate(model = "new") |> 
-  relocate(model)
-# More new species in the second period, but not significantly
-
-
-# Lost species
-
-turnover_summit |>
-  ggplot(aes(x = period, y = lost)) +
-  geom_violin()
-
-turnover_summit |> 
-  ggplot() +
-  geom_histogram(aes(x = lost))
-
-turlost_mod <- glmmTMB(
-  lost ~
-    period + (1 | summit),
-  family = gaussian,
-  data = turnover_summit)
-
-turlost_mod |> model_diagnosis()
-turlost_mod |> model_homoscedasticity()
-turlost_mod |> summary()
-
-turlost_modh <- glmmTMB(
-  lost ~
-    period + (1 | summit),
-  dispformula = ~period,
-  family = gaussian,
-  data = turnover_summit)
-
-turlost_modh |> model_diagnosis() # no problems
-turlost_modh |> model_homoscedasticity() # No problems
-turlost_modh |> summary()
-# Greater species loss in the second period
-
-turlost_results <- turlost_mod |>
-  emmeans( ~ period) |>
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  select(period, estimate, conf_low, conf_high) |>
-  mutate(model = "lost") |> 
-  relocate(model)
-
-
-
-
-# Turnover original species----
-
-turnover_grouped |> 
-  pivot_wider(names_from = category, values_from = total)
-# development  generalist alpine
-# Remained            118    223
-# Appeared1           109    116
-# Appeared2            69     49
-# Disappeared1          6      1
-# Disappeared2          4     10
-# Forth_back           36     21
-# Back_forth            4     10
-
-turnover_status <- turnover_species |> 
-  select(!c(incline:third, presence1:rate)) |> 
-  distinct() |> 
-  pivot_longer(cols = c(distance1, distance2, distance3), names_to = "measurement", values_to = "distance") |> 
-  filter(!is.na(distance)) |> 
-  mutate(altitude = (-1)*distance + 32,
-         development = factor(development, levels = c("Forth_back", "Disappeared2", "Disappeared1", "Back_forth", "Appeared1", "Appeared2", "Remained")))
-
-turnover_status |> 
-  ggplot() + 
-  geom_histogram(aes(x = (distance+0.025) / 32.05))
-
-turdev_mod <- glmmTMB(
-  (distance+0.025) / 32.05 ~ 
-    development,
-  family = beta_family(),
-  dispformula = ~development,
-  data = turnover_status)
-turdev_mod |> model_diagnosis()
-turdev_mod |> summary()
-
-turnover_status_long |> 
-  ggplot() +
-  geom_boxplot(aes(x = development, y = distance)) +
-  scale_y_reverse() +
-  facet_grid(rows = vars(measurement))
-
-
-
 
 # Results----
 
-results_table <- elerate_new_results |>
-  rbind(richrate_results) |>
+results_table <- richrate_results |>
   rbind(turnew_results) |>
   rbind(turlost_results) |>
-  mutate(model = factor(model, levels = c("elevation", "richness", "new", "lost")))
+  rbind(elerate_all_results) |>
+  mutate(model = factor(model, levels = c("richness", "new", "lost", "elevation")))
 # 
 # facet_labels <- data.frame(model = unique(results_table$model), label = letters[1:4], x = -0.2, y = 1.5)
-# 
-results_graph <- results_table |>
-  mutate(period = factor(period, levels = c("period2", "period1"))) |>
-  ggplot(aes(x = estimate, y = period, colour = period)) +
+results_figure <- results_table |>
+  mutate(period = factor(period, levels = c("period2", "period1")),
+         category = factor(category, levels = c("generalist", "alpine"))) |>
+  ggplot(aes(x = estimate, y = period, colour = category)) +
   theme_minimal() +
   facet_grid(rows = vars(model), switch = "y", labeller = as_labeller(adj_label)) +
   geom_vline(xintercept = 0, colour = "black") +
-  # geom_vline(xintercept = c(-0.2, 0.2, 0.4, 0.6, 0.8), colour = "lightgrey") +
-  geom_point(size = 3) +
-  geom_errorbarh(aes(xmin = conf_low, xmax = conf_high), height = 0.3) +
-  # scale_x_continuous(limits = c(-0.2, 0.92), breaks = c(0.0, 0.4, 0.8)) +
-  scale_colour_manual("period", values = colour_mapping$period, labels = adj_label) +
+  geom_point(size = 3, position = position_dodge(width = 0.6)) +
+  geom_errorbarh(aes(xmin = conf_low, xmax = conf_high), height = 0.4, position = position_dodge(width = 0.6)) +
+  scale_y_discrete(position = "right", labels = adj_label) +
+  scale_colour_manual("Specialism", values = colour_mapping$category, labels = adj_label) +
   guides(colour = guide_legend(reverse = TRUE)) +
-  labs(x = "Rate") +
-  theme(panel.spacing.y = unit(2, "lines"),
+  labs(x = "Rate of change") +
+  theme(panel.spacing.y = unit(1, "lines"),
         text = element_text(size = 16, family = "serif"),
-        axis.title.x = element_text(hjust = 0.535),
+        axis.title.x = element_text(hjust = 0.35),
         axis.text.x = element_text(margin = margin(t = 10, b = 10)),
-        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 0),
+        strip.text.y.left = element_markdown(angle = 0, hjust = 0),
         axis.title.y = element_blank(),
-        axis.text.y = element_blank(),
         panel.grid.major.y = element_blank(),
         legend.position = "top",
-        legend.box.margin = margin(l = 85),
+        legend.box.margin = margin(l = -10),
         legend.title = element_text(margin = margin(b = 5, r = 40)),
         legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
-results_graph
-results_graph |> ggsave(file = "Results/Rate_of_change.png", width = 20, height = 15, units = "cm")
+results_figure
+results_figure |> ggsave(file = "Results/Rate_of_change.png", width = 20, height = 15, units = "cm")
+
+
 
 
 
