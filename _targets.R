@@ -285,23 +285,23 @@ list(
     name = elerate_all_bayes,
     command = brm(
       bf(rate ~ 
-           period + (1|summit) + (1|species),
+           period * category + (1|summit) + (1|species),
          sigma ~period),
       family = student(), 
       prior = c(
         prior(normal(0, 0.5), class = "b"),
         prior(normal(0, 0.5), class = "Intercept"),
-        prior(gamma(45, 1), class = "nu")
+        prior(gamma(46, 1), class = "nu")
       ),
       data = elerate_all,
-      control = list(adapt_delta = 0.99),
+      control = list(adapt_delta = 0.999),
       seed = 811
     )
   ),
   tar_target(
     name = elerate_all_results,
     command = elerate_all_bayes |> 
-      emmeans( ~ period) |> 
+      emmeans( ~ period * category) |> 
       tidy(conf.int = TRUE) |> 
       clean_names() |> 
       rename(conf_low = lower_hpd,
@@ -326,13 +326,13 @@ list(
     name = elerate_rem_bayes,
     command = brm(
       bf(rate ~ 
-           period + (1|summit) + (1|species),
+           period * category + (1|summit) + (1|species),
          sigma ~period),
       family = student(), 
       prior = c(
         prior(normal(0, 0.5), class = "b"),
         prior(normal(0, 0.5), class = "Intercept"),
-        prior(gamma(50, 1), class = "nu")
+        prior(gamma(45, 1), class = "nu")
       ),
       data = elerate_remained,
       control = list(adapt_delta = 0.999),
@@ -342,7 +342,7 @@ list(
   tar_target(
     name = elerate_rem_results,
     command = elerate_rem_bayes |> 
-      emmeans( ~ period) |> 
+      emmeans( ~ period * category) |> 
       tidy(conf.int = TRUE) |> 
       clean_names() |> 
       rename(conf_low = lower_hpd,
@@ -367,7 +367,7 @@ list(
     name = elerate_new_bayes,
     command = brm(
       bf(rate ~ 
-           period + (1|summit) + (1|species),
+           period * category + (1|summit) + (1|species),
          sigma ~period),
       family = student(),
       data = elerate_new,
@@ -378,7 +378,7 @@ list(
   tar_target(
     name = elerate_new_results,
     command = elerate_new_bayes |> 
-      emmeans( ~ period) |> 
+      emmeans( ~ period * category) |> 
       tidy(conf.int = TRUE) |> 
       clean_names() |> 
       rename(conf_low = lower_hpd,
