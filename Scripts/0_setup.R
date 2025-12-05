@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "brms","broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "brms","broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -92,15 +92,102 @@ colour_mapping <-  list(
 
 # Model results----
 
+mod_summary <- function(mod) {
+  format_ft <- function(tbl, id_col) {
+    tbl %>%
+      flextable %>%
+      bg(part = "header", bg = "black") %>%
+      color(part = "header", color = "white") %>%
+      bold(part = "header") %>%
+      bg(part = "body", bg = "white") %>%
+      color(part = "body", color = "black") %>%
+      bold(i = ~ ((CI_lower * CI_upper) > 0)) %>%
+      autofit()
+  }
+  contrast_matrix <- list(
+    "1A-2A" = c(-1, 1, 0, 0),
+    "1G-2G" = c(0, 0, -1, 1),
+    "1A-1G" = c(-1, 0, 1, 0),
+    "2A-2G" = c(0, -1, 0, 1)
+  )
+  
+  ## Model
+  # Extract the fixed effects of the model and arrange as dataframe
+  model_df <- tidy(mod, effects = "fixed", conf.int = TRUE) %>%
+    select(!c(effect, component)) %>%
+    filter(!grepl("sigma", term)) %>%
+    mutate(statistic = if (!"statistic" %in% names(.)) NA_real_ else statistic,
+           p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
+    relocate(c(statistic, p.value), .after = std.error) %>%
+    rename(Term = term, Estimate = estimate, SE = std.error, Statistic = statistic, p_value = p.value, CI_lower = conf.low, CI_upper = conf.high) %>%
+    mutate(across(where(is.numeric), ~ round(., 4)))
+  # Flextable
+  model_ft <- model_df %>%
+    format_ft() %>%
+    align(part = "all", j = -1, align = "center") %>%
+    hline(i = c(1, 3))
+
+  ## Emmeans
+  # Extract yearly trends
+  emmeans <- emmeans(mod, ~ period * category)
+  # Arrange as dataframe
+  emmeans_df <- emmeans %>%
+    tidy(conf.int = TRUE) %>%
+    mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
+           p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
+    relocate(std.error, .after = estimate) %>%
+    rename(Period = period, Specialism = category, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    mutate(across(where(is.numeric), ~ round(., 4)))
+  # Flextable
+  emmeans_ft <-  emmeans_df %>%
+    format_ft() %>%
+    align(part = "all", j = 3:7, align = "center") %>%
+    hline(i = 2) %>%
+    vline(j = 2)
+
+  ## Contrasts
+  ref_grid <- emmeans |> summary()
+  contrast_numbers <- unique(ref_grid[c("period", "category")])
+  # Perform contrast analysis with only the desired contrast
+  contrast <- emmeans %>%
+    contrast(method = contrast_matrix)
+  # Make into a dataframe with the desired output
+  contrast_df <- contrast %>%
+    tidy(conf.int = TRUE) %>%
+    select(!c(term, null.value)) %>%
+    mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
+           p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
+    relocate(std.error, .after = estimate) %>%
+    rename(Contrast = contrast, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    mutate(across(where(is.numeric), ~ round(., 4)))
+  # Flextable
+  contrast_ft <-  contrast_df %>% 
+    format_ft() %>%
+    align(part = "all", j = 2:6, align = "center") %>%
+    hline(i = 2) %>%
+    vline(j = 1)
+  
+  return(list(
+    model_ft = model_ft, 
+    emmeans = emmeans,
+    emmeans_df = emmeans_df,
+    emmeans_ft = emmeans_ft,
+    contrast_numbers,
+    contrast_matrix,
+    contrast = contrast,
+    contrast_df = contrast_df,
+    contrast_ft = contrast_ft))
+}
+
 gg_results <- function(data) {
   figure <- data |> 
-    mutate(period = factor(period, levels = c("period2", "period1")),
-           category = factor(category, levels = c("generalist", "alpine"))) |>
-    ggplot(aes(x = estimate, y = period, colour = category)) +
+    mutate(Period = factor(Period, levels = c("period2", "period1")),
+           Specialism = factor(Specialism, levels = c("generalist", "alpine"))) |>
+    ggplot(aes(x = Estimate, y = Period, colour = Specialism)) +
     theme_minimal() +
     geom_vline(xintercept = 0, colour = "black") +
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
-    geom_errorbarh(aes(xmin = conf_low, xmax = conf_high), height = 0.4, position = position_dodge(width = 0.6)) +
+    geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = position_dodge(width = 0.6)) +
     scale_y_discrete(labels = adj_label) +
     scale_colour_manual("Specialism", values = colour_mapping$category, labels = adj_label) +
     guides(colour = guide_legend(reverse = TRUE)) +
