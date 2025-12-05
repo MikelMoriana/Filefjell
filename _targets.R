@@ -272,7 +272,7 @@ list(
   tar_target(
     name = richness_rate,
     command = turnover_species |> 
-      summarise(.by = c(summit, period), rate = sum(rate))
+      summarise(.by = c(summit, period, category), rate = sum(rate))
   ),
   tar_target(
     name = richrate_mod,
@@ -297,7 +297,7 @@ list(
   tar_target(
     name = turnover_summit,
     command = turnover_species |> 
-      summarise(.by = c(summit, period), 
+      summarise(.by = c(summit, period, category), 
                 new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
                 nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
                 lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
