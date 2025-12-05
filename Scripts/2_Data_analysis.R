@@ -267,11 +267,12 @@ turnover_summit |>
   ggplot() +
   geom_histogram(aes(x = new))
 
-turnew_mod <- glmmTMB(
-  new ~
-    period * category + (1 | summit),
-  family = gaussian,
-  data = turnover_summit)
+# turnew_mod <- glmmTMB(
+#   new ~
+#     period * category + (1 | summit),
+#   family = gaussian,
+#   data = turnover_summit)
+turnew_mod <- tar_read(turnew_mod) # Use targets to make sure they are correct
 
 turnew_mod |> model_diagnosis() # No problems
 turnew_mod |> model_homoscedasticity() # No problems
@@ -307,19 +308,20 @@ turlost_mod |> model_diagnosis()
 turlost_mod |> model_homoscedasticity()
 turlost_mod |> summary()
 
-turlost_modh <- glmmTMB(
-  lost ~
-    period * category + (1 | summit),
-  dispformula = ~period*category, # complex, but helps with uniformity and both heteroskedasticities
-  family = gaussian,
-  data = turnover_summit)
+# turlost_modh <- glmmTMB(
+#   lost ~
+#     period * category + (1 | summit),
+#   dispformula = ~period*category, # complex, but helps with uniformity and both heteroskedasticities
+#   family = gaussian,
+#   data = turnover_summit)
+turlost_modh <- tar_read(turlost_mod) # Use targets to make sure they are correct
 
 turlost_modh |> model_diagnosis() # no problems
 turlost_modh |> model_homoscedasticity() # No problems
 turlost_modh |> summary()
 # Greater species loss in the second period
 
-turlost_results <- turlost_mod |>
+turlost_results <- turlost_modh |>
   emmeans( ~ period * category) |>
   tidy(conf.int = TRUE) |> 
   clean_names() |> 
@@ -479,20 +481,21 @@ pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "category")
 
 ### Model 2
 
-elerate_all_bayesh <- brm(
-  bf(rate ~ 
-    period * category + (1|summit) + (1|species),
-    sigma ~period),
-  family = student(), 
-  prior = c(
-    prior(normal(0, 0.5), class = "b"),
-    prior(normal(0, 0.5), class = "Intercept"),
-    prior(gamma(46, 1), class = "nu")
-  ),
-  data = elerate_all,
-  control = list(adapt_delta = 0.999),
-  seed = 811
-  )
+# elerate_all_bayesh <- brm(
+#   bf(rate ~ 
+#     period * category + (1|summit) + (1|species),
+#     sigma ~period),
+#   family = student(), 
+#   prior = c(
+#     prior(normal(0, 0.5), class = "b"),
+#     prior(normal(0, 0.5), class = "Intercept"),
+#     prior(gamma(46, 1), class = "nu")
+#   ),
+#   data = elerate_all,
+#   control = list(adapt_delta = 0.999),
+#   seed = 811
+#   )
+elerate_all_bayesh <- tar_read(elerate_all_bayes)
 withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay", size = 1))
 loo(elerate_all_tbayesp, elerate_all_bayesh)
 
@@ -562,20 +565,21 @@ elerate_all_results <- elerate_all_bayesh |>
 
 # Elevation change. Only species present all years----
 
-elerate_rem_bayesh <- brm(
-  bf(rate ~ 
-       period * category + (1|summit) + (1|species),
-     sigma ~period),
-  family = student(), 
-  prior = c(
-    prior(normal(0, 0.5), class = "b"),
-    prior(normal(0, 0.5), class = "Intercept"),
-    prior(gamma(45, 1), class = "nu")
-  ),
-  data = elerate_remained,
-  control = list(adapt_delta = 0.999),
-  seed = 811
-)
+# elerate_rem_bayesh <- brm(
+#   bf(rate ~ 
+#        period * category + (1|summit) + (1|species),
+#      sigma ~period),
+#   family = student(), 
+#   prior = c(
+#     prior(normal(0, 0.5), class = "b"),
+#     prior(normal(0, 0.5), class = "Intercept"),
+#     prior(gamma(45, 1), class = "nu")
+#   ),
+#   data = elerate_remained,
+#   control = list(adapt_delta = 0.999),
+#   seed = 811
+# )
+elerate_rem_bayesh <- tar_read(elerate_rem_bayes)
 
 ## Diagnosis
 
@@ -644,15 +648,16 @@ elerate_rem_results <- elerate_rem_bayesh |>
 
 # Elevation change Including new species----
 
-elerate_new_bayesh <- brm(
-  bf(rate ~ 
-       period * category + (1|summit) + (1|species),
-     sigma ~period),
-  family = student(),
-  data = elerate_new,
-  control = list(adapt_delta = 0.999),
-  seed = 811
-)
+# elerate_new_bayesh <- brm(
+#   bf(rate ~ 
+#        period * category + (1|summit) + (1|species),
+#      sigma ~period),
+#   family = student(),
+#   data = elerate_new,
+#   control = list(adapt_delta = 0.999),
+#   seed = 811
+# )
+elerate_new_bayesh <- tar_read(elerate_new_bayes)
 withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) 
 
 
