@@ -211,7 +211,7 @@ list(
       relocate(category, .after = species) |> 
       arrange(summit, year, species)
   ),
-  # Analyses datasets----
+  # Datasets for analyses----
   tar_target(
     name = filefjell_wide,
     command = filefjell_data_clean |> 
@@ -267,6 +267,77 @@ list(
       pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
       mutate(period = as.factor(period)) |> 
       mutate(rate = ifelse(period == "period1", rate1, rate2))
+  ),
+  # Richness----
+  tar_target(
+    name = richness_rate,
+    command = turnover_species |> 
+      summarise(.by = c(summit, period), rate = sum(rate))
+  ),
+  tar_target(
+    name = richrate_mod,
+    command = glmmTMB(
+      rate ~
+        period * category + (1 | summit),
+      dispformula = ~period,
+      family = gaussian,
+      data = richness_rate)
+  ),
+  tar_target(
+    name = richrate_results,
+    command = richrate_mod |>
+      emmeans( ~ period * category) |>
+      tidy(conf.int = TRUE) |> 
+      clean_names() |> 
+      select(period, category, estimate, conf_low, conf_high) |>
+      mutate(model = "richness") |> 
+      relocate(model)
+  ),
+  # Turnover----
+  tar_target(
+    name = turnover_summit,
+    command = turnover_species |> 
+      summarise(.by = c(summit, period), 
+                new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
+                nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
+                lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+  ),
+  tar_target(
+    name = turnew_mod,
+    command = glmmTMB(
+      new ~
+        period * category + (1 | summit),
+      family = gaussian,
+      data = turnover_summit)
+  ),
+  tar_target(
+    name = turnew_results,
+    command = turnew_mod |>
+      emmeans( ~ period * category) |>
+      tidy(conf.int = TRUE) |> 
+      clean_names() |> 
+      select(period, category, estimate, conf_low, conf_high) |>
+      mutate(model = "new") |> 
+      relocate(model)
+  ),
+  tar_target(
+    name = turlost_mod,
+    command = glmmTMB(
+      lost ~
+        period * category + (1 | summit),
+      dispformula = ~period*category, 
+      family = gaussian,
+      data = turnover_summit)
+  ),
+  tar_target(
+    name = turlost_results,
+    command = turlost_mod |>
+      emmeans( ~ period * category) |>
+      tidy(conf.int = TRUE) |> 
+      clean_names() |> 
+      select(period, category, estimate, conf_low, conf_high) |>
+      mutate(model = "lost") |> 
+      relocate(model)
   ),
   # Elevation----
   tar_target(
@@ -384,76 +455,6 @@ list(
       rename(conf_low = lower_hpd,
              conf_high = upper_hpd) |> 
       mutate(model = "elevation") |> 
-      relocate(model)
-  ),
-  # Richness----
-  tar_target(
-    name = richness_rate,
-    command = turnover_species |> 
-      summarise(.by = c(summit, period), rate = sum(rate))
-  ),
-  tar_target(
-    name = richrate_mod,
-    command = glmmTMB(
-      rate ~
-        period + (1 | summit),
-      family = gaussian,
-      data = richness_rate)
-  ),
-  tar_target(
-    name = richrate_results,
-    command = richrate_mod |>
-      emmeans( ~ period) |>
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      select(period, estimate, conf_low, conf_high) |>
-      mutate(model = "richness") |> 
-      relocate(model)
-  ),
-  # Turnover----
-  tar_target(
-    name = turnover_summit,
-    command = turnover_species |> 
-      summarise(.by = c(summit, period), 
-                new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-                nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-                lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
-    ),
-  tar_target(
-    name = turnew_mod,
-    command = glmmTMB(
-      new ~
-        period + (1 | summit),
-      family = gaussian,
-      data = turnover_summit)
-  ),
-  tar_target(
-    name = turnew_results,
-    command = turnew_mod |>
-      emmeans( ~ period) |>
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      select(period, estimate, conf_low, conf_high) |>
-      mutate(model = "new") |> 
-      relocate(model)
-  ),
-  tar_target(
-    name = turlost_mod,
-    command = glmmTMB(
-      lost ~
-        period + (1 | summit),
-      dispformula = ~period,
-      family = gaussian,
-      data = turnover_summit)
-  ),
-  tar_target(
-    name = turlost_results,
-    command = turlost_mod |>
-      emmeans( ~ period) |>
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      select(period, estimate, conf_low, conf_high) |>
-      mutate(model = "lost") |> 
       relocate(model)
   )
   # # New species per nature type----
