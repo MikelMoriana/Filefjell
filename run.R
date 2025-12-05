@@ -75,6 +75,9 @@ manual_positions <- tribble(
   "turnew_results",                2000,   -150,
   "turlost_mod",                   1800,    -50,
   "turlost_results",               2000,    -50,
+  
+  #Results
+  "mod_summary",                   2400,      0
 )
 
 nodes <- vis_data$x$nodes |> 
