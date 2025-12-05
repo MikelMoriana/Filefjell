@@ -1,10 +1,8 @@
 # Libraries----
 
-library(ggeffects)
 library(vegan)
 
 source("Scripts/0_setup.R")
-
 
 
 # Data----
@@ -227,12 +225,13 @@ richrate_mod |> model_diagnosis() # No problems
 richrate_mod |> model_homoscedasticity() # No problems
 richrate_mod |> summary()
 
-richrate_modh <- glmmTMB(
-  rate ~
-    period * category + (1 | summit),
-  dispformula = ~period,
-  family = gaussian,
-  data = richness_rate)
+# richrate_modh <- glmmTMB(
+#   rate ~
+#     period * category + (1 | summit),
+#   dispformula = ~period,
+#   family = gaussian,
+#   data = richness_rate)
+richrate_modh <- tar_read(richrate_mod) # Use targets to make sure they are correct
 
 richrate_modh |> model_diagnosis() # No problems
 richrate_modh |> model_homoscedasticity() # No problems
@@ -724,40 +723,61 @@ elerate_new_results <- elerate_new_bayesh |>
 
 # Results----
 
+# One ggplot
+
 results_table <- richrate_results |>
   rbind(turnew_results) |>
   rbind(turlost_results) |>
   rbind(elerate_all_results) |>
   mutate(model = factor(model, levels = c("richness", "new", "lost", "elevation")))
-# 
-# facet_labels <- data.frame(model = unique(results_table$model), label = letters[1:4], x = -0.2, y = 1.5)
-results_figure <- results_table |>
-  mutate(period = factor(period, levels = c("period2", "period1")),
-         category = factor(category, levels = c("generalist", "alpine"))) |>
-  ggplot(aes(x = estimate, y = period, colour = category)) +
-  theme_minimal() +
+
+results_figure <- results_table |> gg_results() +
   facet_grid(rows = vars(model), switch = "y", labeller = as_labeller(adj_label)) +
-  geom_vline(xintercept = 0, colour = "black") +
-  geom_point(size = 3, position = position_dodge(width = 0.6)) +
-  geom_errorbarh(aes(xmin = conf_low, xmax = conf_high), height = 0.4, position = position_dodge(width = 0.6)) +
   scale_y_discrete(position = "right", labels = adj_label) +
-  scale_colour_manual("Specialism", values = colour_mapping$category, labels = adj_label) +
-  guides(colour = guide_legend(reverse = TRUE)) +
   labs(x = "Rate of change") +
   theme(panel.spacing.y = unit(1, "lines"),
-        text = element_text(size = 16, family = "serif"),
-        axis.title.x = element_text(hjust = 0.35),
-        axis.text.x = element_text(margin = margin(t = 10, b = 10)),
+        text = element_text(size = 16),
         strip.text.y.left = element_markdown(angle = 0, hjust = 0),
-        axis.title.y = element_blank(),
-        panel.grid.major.y = element_blank(),
-        legend.position = "top",
-        legend.box.margin = margin(l = -10),
-        legend.title = element_text(margin = margin(b = 5, r = 40)),
-        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
+        axis.title.y = element_blank())
 results_figure
 results_figure |> ggsave(file = "Results/Rate_of_change.png", width = 20, height = 15, units = "cm")
 
+
+# Several ggplots
+
+richrate_figure <- richrate_results |> 
+  gg_results() +
+  scale_x_continuous(limits = c(-0.3, 0.5),
+                     labels = NULL) +
+  labs(x = NULL, y = adj_label["richness"])
+
+turnew_figure <- turnew_results |> 
+  gg_results() +
+  scale_x_continuous(limits = c(-0.3, 0.5),
+                     labels = NULL) +
+  labs(x = NULL, y = adj_label["new"])
+
+turlost_figure <- turlost_results |> 
+  gg_results() +
+  scale_x_continuous(limits = c(-0.3, 0.5)) +
+  labs(x = "Rate of change in species") +
+  labs(x = "Rate of change (number of species / year)", y = adj_label["lost"])
+
+elerate_all_figure <- elerate_all_results |> 
+  gg_results() +
+  scale_x_continuous(limits = c(-0.06, 0.10)) +
+  labs(x = "Rate of change (metres / year)", y = adj_label["elevation"])
+
+results_figure_stack <- ggarrange(
+  plotlist = list(richrate_figure, turnew_figure, turlost_figure, elerate_all_figure),
+  ncol = 1,
+  nrow = 4,
+  align = "v",
+  common.legend = TRUE,
+  heights = c(1, 1, 1.68, 1.68)
+)
+results_figure_stack
+results_figure_stack |> ggsave(file = "Results/Rate_of_change_stack.png", width = 20, height = 15, units = "cm")
 
 
 
