@@ -285,13 +285,8 @@ list(
   ),
   tar_target(
     name = richrate_results,
-    command = richrate_mod |>
-      emmeans( ~ period * category) |>
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      select(period, category, estimate, conf_low, conf_high) |>
-      mutate(model = "richness") |> 
-      relocate(model)
+    command = richrate_mod |> 
+      mod_summary()
   ),
   # Turnover----
   tar_target(
@@ -313,12 +308,7 @@ list(
   tar_target(
     name = turnew_results,
     command = turnew_mod |>
-      emmeans( ~ period * category) |>
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      select(period, category, estimate, conf_low, conf_high) |>
-      mutate(model = "new") |> 
-      relocate(model)
+      mod_summary()
   ),
   tar_target(
     name = turlost_mod,
@@ -331,13 +321,8 @@ list(
   ),
   tar_target(
     name = turlost_results,
-    command = turlost_mod |>
-      emmeans( ~ period * category) |>
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      select(period, category, estimate, conf_low, conf_high) |>
-      mutate(model = "lost") |> 
-      relocate(model)
+    command = turlost_mod |> 
+      mod_summary()
   ),
   # Elevation----
   tar_target(
@@ -372,13 +357,7 @@ list(
   tar_target(
     name = elerate_all_results,
     command = elerate_all_bayes |> 
-      emmeans( ~ period * category) |> 
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      rename(conf_low = lower_hpd,
-             conf_high = upper_hpd) |> 
-      mutate(model = "elevation") |> 
-      relocate(model)
+      mod_summary()
   ),
   tar_target(
     name = elerate_remained,
@@ -413,13 +392,7 @@ list(
   tar_target(
     name = elerate_rem_results,
     command = elerate_rem_bayes |> 
-      emmeans( ~ period * category) |> 
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      rename(conf_low = lower_hpd,
-             conf_high = upper_hpd) |> 
-      mutate(model = "elevation") |> 
-      relocate(model)
+      mod_summary()
   ),
   tar_target(
     name = elerate_new,
@@ -449,13 +422,7 @@ list(
   tar_target(
     name = elerate_new_results,
     command = elerate_new_bayes |> 
-      emmeans( ~ period * category) |> 
-      tidy(conf.int = TRUE) |> 
-      clean_names() |> 
-      rename(conf_low = lower_hpd,
-             conf_high = upper_hpd) |> 
-      mutate(model = "elevation") |> 
-      relocate(model)
+      mod_summary()
   )
   # # New species per nature type----
   # tar_target(
