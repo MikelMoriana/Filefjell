@@ -332,21 +332,21 @@ turlost_results <- turlost_modh |>
 
 
 
-# Turnover original species----
+# Turnover original species TO WORK ON----
 
 turnover_grouped |> 
   pivot_wider(names_from = category, values_from = total)
 # development  generalist alpine
-# Remained            118    223
-# Appeared1           109    116
-# Appeared2            69     49
+# Remained            121    220
+# Appeared1           111    114
+# Appeared2            70     48
 # Disappeared1          6      1
 # Disappeared2          4     10
 # Forth_back           36     21
 # Back_forth            4     10
 
 turnover_status <- turnover_species |> 
-  select(!c(incline:third, presence1:rate)) |> 
+  select(!c(first:third, presence1:rate)) |> 
   distinct() |> 
   pivot_longer(cols = c(distance1, distance2, distance3), names_to = "measurement", values_to = "distance") |> 
   filter(!is.na(distance)) |> 
