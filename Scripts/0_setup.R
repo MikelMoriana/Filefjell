@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "brms","broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "brms","broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -75,12 +75,14 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
   return(plot)
 }
 
-adj_label <- c("richness" = "<b>a)</b> Species<br>richness", 
-               "new" = "<b>b)</b> New species", 
-               "lost" = "<b>c)</b> Lost species", 
-               "elevation" = "<b>d)</b> Species<br>altitude",
-               "alpine" = "Alpine",
-               "generalist" = "Generalist")
+adj_label <- c(richness = "<b>a)</b> Species<br><span style='color:transparent'>a) </span>richness", 
+               new = "<b>b)</b> New<br><span style='color:transparent'>b) </span>species", 
+               lost = "<b>c)</b> Lost<br><span style='color:transparent'>c) </span>species", 
+               elevation = "<b>d)</b> Species<br><span style='color:transparent'>d) </span>altitude",
+               alpine = "Alpine",
+               generalist = "Generalist",
+               period1 = "1972-2009",
+               period2 = "2009-2024")
 
 colour_mapping <-  list(
   period = c("period1" = "#859395", "period2" = "#f58800"),
@@ -90,8 +92,29 @@ colour_mapping <-  list(
 
 # Model results----
 
-
-
+gg_results <- function(data) {
+  figure <- data |> 
+    mutate(period = factor(period, levels = c("period2", "period1")),
+           category = factor(category, levels = c("generalist", "alpine"))) |>
+    ggplot(aes(x = estimate, y = period, colour = category)) +
+    theme_minimal() +
+    geom_vline(xintercept = 0, colour = "black") +
+    geom_point(size = 3, position = position_dodge(width = 0.6)) +
+    geom_errorbarh(aes(xmin = conf_low, xmax = conf_high), height = 0.4, position = position_dodge(width = 0.6)) +
+    scale_y_discrete(labels = adj_label) +
+    scale_colour_manual("Specialism", values = colour_mapping$category, labels = adj_label) +
+    guides(colour = guide_legend(reverse = TRUE)) +
+    theme(text = element_text(size = 14, family = "serif"),
+          axis.title.x = element_text(hjust = 0.35),
+          axis.text.x = element_text(margin = margin(t = 10, b = 10)),
+          axis.title.y = element_markdown(angle = 0, hjust = 0, vjust = 0.5, margin = margin(r = 30)),
+          panel.grid.major.y = element_blank(),
+          legend.position = "top",
+          legend.box.margin = margin(l = -10),
+          legend.title = element_text(margin = margin(b = 5, r = 40)),
+          legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
+  return(figure)
+}
 
 
 # Model fitness----
