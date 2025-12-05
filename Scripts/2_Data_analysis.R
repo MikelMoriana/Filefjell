@@ -186,7 +186,7 @@ filefjell_2024_clean <- tar_read(filefjell_2024_clean)
 
 
 
-# Richness change----
+# Richness----
 
 ## Exploratory graphs
 
@@ -237,13 +237,8 @@ richrate_modh |> model_diagnosis() # No problems
 richrate_modh |> model_homoscedasticity() # No problems
 richrate_modh |> summary()
 
-richrate_results <- richrate_modh |>
-  emmeans( ~ period * category) |>
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  select(period, category, estimate, conf_low, conf_high) |>
-  mutate(model = "richness") |> 
-  relocate(model)
+richrate_results <- richrate_modh |> 
+  mod_summary()
 
 
 
@@ -279,12 +274,7 @@ turnew_mod |> model_homoscedasticity() # No problems
 turnew_mod |> summary()
 
 turnew_results <- turnew_mod |>
-  emmeans( ~ period * category) |>
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  select(period, category, estimate, conf_low, conf_high) |>
-  mutate(model = "new") |> 
-  relocate(model)
+  mod_summary()
 # More new species in the second period, but not significantly
 
 
@@ -322,12 +312,7 @@ turlost_modh |> summary()
 # Greater species loss in the second period
 
 turlost_results <- turlost_modh |>
-  emmeans( ~ period * category) |>
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  select(period, category, estimate, conf_low, conf_high) |>
-  mutate(model = "lost") |> 
-  relocate(model)
+  mod_summary()
 
 
 
@@ -371,8 +356,6 @@ turnover_status_long |>
   geom_boxplot(aes(x = development, y = distance)) +
   scale_y_reverse() +
   facet_grid(rows = vars(measurement))
-
-
 
 
 
@@ -551,19 +534,13 @@ elerate_all_bayesh |> loo() # No influential points
 # Summary
 elerate_all_bayesh |> summary()
 
-elerate_all_results <- elerate_all_bayesh |> 
-  emmeans( ~ period * category) |> 
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  rename(conf_low = lower_hpd,
-         conf_high = upper_hpd) |> 
-  mutate(model = "elevation") |> 
-  relocate(model)
+elerate_all_results <- elerate_all_bayesh |>
+  mod_summary()
+  
 
 
 
-
-# Elevation change. Only species present all years----
+## Elevation change. Only species present all years----
 
 # elerate_rem_bayesh <- brm(
 #   bf(rate ~ 
@@ -635,18 +612,12 @@ elerate_rem_bayesh |> loo() # No influential points
 elerate_rem_bayesh |> summary()
 
 elerate_rem_results <- elerate_rem_bayesh |> 
-  emmeans( ~ period * category) |> 
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  rename(conf_low = lower_hpd,
-         conf_high = upper_hpd) |> 
-  mutate(model = "elevation") |> 
-  relocate(model)
+  mod_summary()
 
 
 
 
-# Elevation change Including new species----
+## Elevation change Including new species----
 
 # elerate_new_bayesh <- brm(
 #   bf(rate ~ 
@@ -714,61 +685,92 @@ elerate_new_bayesh |> loo() # No influential points
 elerate_new_bayesh |> summary()
 
 elerate_new_results <- elerate_new_bayesh |> 
-  emmeans( ~ period * category) |> 
-  tidy(conf.int = TRUE) |> 
-  clean_names() |> 
-  rename(conf_low = lower_hpd,
-         conf_high = upper_hpd) |> 
-  mutate(model = "elevation") |> 
-  relocate(model)
-
+  mod_summary()
 
 
 
 
 # Results----
 
+emmeans_overview <- richrate_results$emmeans_df |>
+  mutate(Model = "richness") |> 
+  rbind(turnew_results$emmeans_df |> 
+          mutate(Model = "new")) |>
+  rbind(turlost_results$emmeans_df |> 
+          mutate(Model = "lost")) |> 
+  rbind(elerate_all_results$emmeans_df |> 
+          mutate(df = NA_real_,
+                 statistic = NA_real_,
+                 Model = "elevation") |> 
+          relocate(df, .after = Estimate) |> 
+          relocate(statistic, .after = CI_upper)) |> 
+  relocate(Model) |> 
+  mutate(Model = factor(Model, levels = c("richness", "new", "lost", "elevation")))
+
+contrasts_overview <- richrate_results$contrast_df |>
+  mutate(Model = "richness") |> 
+  rbind(turnew_results$contrast_df |> 
+          mutate(Model = "new")) |>
+  rbind(turlost_results$contrast_df |> 
+          mutate(Model = "lost")) |> 
+  rbind(elerate_all_results$contrast_df |> 
+          mutate(df = NA_real_,
+                 statistic = NA_real_,
+                 Model = "elevation") |> 
+          relocate(df, .after = Estimate) |> 
+          relocate(statistic, .after = CI_upper)) |> 
+  relocate(Model) |> 
+  mutate(Model = factor(Model, levels = c("richness", "new", "lost", "elevation")))
+
+contrasts_table <- contrasts_overview |>
+  flextable() |> 
+  bg(part = "header", bg = "black") |> 
+  color(part = "header", color = "white") |> 
+  bold(part = "header") |>
+  bg(part = "body", bg = "white") |> 
+  color(part = "body", color = "black") |> 
+  bold(i = ~ ((CI_lower * CI_upper) > 0)) |> 
+  align(part = "all", j = 4:6, align = "center") |>
+  hline(i = c(4, 8, 12)) |> 
+  autofit()
+contrasts_table
+
+
 # One ggplot
 
-results_table <- richrate_results |>
-  rbind(turnew_results) |>
-  rbind(turlost_results) |>
-  rbind(elerate_all_results) |>
-  mutate(model = factor(model, levels = c("richness", "new", "lost", "elevation")))
-
-results_figure <- results_table |> gg_results() +
-  facet_grid(rows = vars(model), switch = "y", labeller = as_labeller(adj_label)) +
+emmeans_figure <- emmeans_overview |> gg_results() +
+  facet_grid(rows = vars(Model), switch = "y", labeller = as_labeller(adj_label)) +
   scale_y_discrete(position = "right", labels = adj_label) +
   labs(x = "Rate of change") +
   theme(panel.spacing.y = unit(1, "lines"),
         text = element_text(size = 16),
         strip.text.y.left = element_markdown(angle = 0, hjust = 0),
         axis.title.y = element_blank())
-results_figure
-results_figure |> ggsave(file = "Results/Rate_of_change.png", width = 20, height = 15, units = "cm")
+emmeans_figure
+emmeans_figure |> ggsave(file = "Results/Rate_of_change.png", width = 20, height = 15, units = "cm")
 
 
 # Several ggplots
 
-richrate_figure <- richrate_results |> 
+richrate_figure <- richrate_results$emmeans_df |> 
   gg_results() +
-  scale_x_continuous(limits = c(-0.3, 0.5),
+  scale_x_continuous(limits = c(-0.4, 0.5),
                      labels = NULL) +
   labs(x = NULL, y = adj_label["richness"])
 
-turnew_figure <- turnew_results |> 
+turnew_figure <- turnew_results$emmeans_df |> 
   gg_results() +
-  scale_x_continuous(limits = c(-0.3, 0.5),
+  scale_x_continuous(limits = c(-0.4, 0.5),
                      labels = NULL) +
   labs(x = NULL, y = adj_label["new"])
 
-turlost_figure <- turlost_results |> 
+turlost_figure <- turlost_results$emmeans_df |> 
   gg_results() +
-  scale_x_continuous(limits = c(-0.3, 0.5)) +
+  scale_x_continuous(limits = c(-0.4, 0.5)) +
   labs(x = "Rate of change in species") +
   labs(x = "Rate of change (number of species / year)", y = adj_label["lost"])
 
-elerate_all_figure <- elerate_all_results |> 
+elerate_all_figure <- elerate_all_results$emmeans_df |> 
   gg_results() +
   scale_x_continuous(limits = c(-0.06, 0.10)) +
   labs(x = "Rate of change (metres / year)", y = adj_label["elevation"])
