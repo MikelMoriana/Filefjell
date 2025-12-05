@@ -79,7 +79,7 @@ manual_positions <- tribble(
 
 nodes <- vis_data$x$nodes |> 
   left_join(manual_positions, by = "name") |> 
-  mutate(hidden = ifelse(name %in% c("adj_label", "backwards_selection", "colour_mapping", "data_tidying", "gg_modvars", "gg_yearline", "model_diagnosis", "model_distribution", "model_homoscedasticity", "optimizer", "remove_terms"), TRUE, FALSE))
+  mutate(hidden = ifelse(name %in% c("adj_label", "backwards_selection", "colour_mapping", "data_tidying", "gg_modvars", "gg_results", "gg_yearline", "model_diagnosis", "model_distribution", "model_homoscedasticity", "optimizer", "remove_terms"), TRUE, FALSE))
 
 visNetwork(nodes, edges) |> 
   visNodes() |> 
