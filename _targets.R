@@ -7,7 +7,7 @@ library(targets)
 
 # Target options:
 tar_option_set(
-  packages = c("tidyverse", "janitor", "forcats", "vegan", "glmmTMB", "lme4", "splines"),
+  packages = c("tidyverse", "janitor", "forcats", "brms", "broom.mixed", "emmeans", "glmmTMB"),
   format = "rds", 
   seed = 811
 )
