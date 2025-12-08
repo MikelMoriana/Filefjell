@@ -186,63 +186,6 @@ filefjell_2024_clean <- tar_read(filefjell_2024_clean)
 
 
 
-# Richness----
-
-## Exploratory graphs
-
-richness_rate |>
-  ggplot(aes(x = period, y = rate)) +
-  geom_violin() +
-  labs(title = " elevations by Year",
-       x = "Year",
-       y = "Vertical elevation to Top (meters)") +
-  theme_minimal()
-
-richness_rate |>
-  ggplot(aes(x = summit:period, y = rate, color = summit)) +
-  geom_point() +
-  labs(title = "Plot of richness change per year",
-       x = "Year",
-       y = "Richness change (species/year)") +
-  theme_minimal() +
-  theme(legend.position = "none")
-# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
-
-
-## Modelling
-
-richness_rate |> 
-  ggplot() +
-  geom_histogram(aes(x = rate))
-
-richrate_mod <- glmmTMB(
-  rate ~
-    period * category + (1 | summit),
-  family = gaussian,
-  data = richness_rate)
-
-richrate_mod |> model_diagnosis() # No problems
-richrate_mod |> model_homoscedasticity() # No problems
-richrate_mod |> summary()
-
-# richrate_modh <- glmmTMB(
-#   rate ~
-#     period * category + (1 | summit),
-#   dispformula = ~period,
-#   family = gaussian,
-#   data = richness_rate)
-richrate_modh <- tar_read(richrate_mod) # Use targets to make sure they are correct
-
-richrate_modh |> model_diagnosis() # No problems
-richrate_modh |> model_homoscedasticity() # No problems
-richrate_modh |> summary()
-
-richrate_results <- richrate_modh |> 
-  mod_summary()
-
-
-
-
 # Turnover----
 
 turnover_summit |>
@@ -276,6 +219,8 @@ turnew_mod |> summary()
 turnew_results <- turnew_mod |>
   mod_summary()
 # More new species in the second period, but not significantly
+
+turnew_results |> ft_contrasts("Richness - Contrasts")
 
 
 # Lost species
@@ -356,6 +301,83 @@ turnover_status_long |>
   geom_boxplot(aes(x = development, y = distance)) +
   scale_y_reverse() +
   facet_grid(rows = vars(measurement))
+
+
+
+
+# Richness----
+
+## Exploratory graphs
+
+richness_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin() +
+  labs(title = " elevations by Year",
+       x = "Year",
+       y = "Vertical elevation to Top (meters)") +
+  theme_minimal()
+
+richness_rate |>
+  ggplot(aes(x = summit:period, y = rate, color = summit)) +
+  geom_point() +
+  labs(title = "Plot of richness change per year",
+       x = "Year",
+       y = "Richness change (species/year)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
+
+
+## Modelling
+
+richness_rate |> 
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+richrate_mod <- glmmTMB(
+  rate ~
+    period * category + (1 | summit),
+  family = gaussian,
+  data = richness_rate)
+
+richrate_mod |> model_diagnosis() # No problems
+richrate_mod |> model_homoscedasticity() # No problems
+richrate_mod |> summary()
+
+# richrate_modh <- glmmTMB(
+#   rate ~
+#     period * category + (1 | summit),
+#   dispformula = ~period,
+#   family = gaussian,
+#   data = richness_rate)
+richrate_modh <- tar_read(richrate_mod) # Use targets to make sure they are correct
+
+richrate_modh |> model_diagnosis() # No problems
+richrate_modh |> model_homoscedasticity() # No problems
+richrate_modh |> summary()
+
+richrate_results <- richrate_modh |> 
+  mod_summary()
+
+richrate_contrast_ft <- richrate_results$contrast_df |> 
+  select(!c(df, statistic)) |> 
+  mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Alpine. Period 1 - Period 2",
+                              Contrast == "1G-2G" ~ "Generalist. Period 1 - Period 2",
+                              Contrast == "1A-1G" ~ "Period 1. Alpine - Generalist",
+                              Contrast == "2A-2G" ~ "Period 2. Alpine - Generalist")) |> 
+  rename("Richness - Contrast" = Contrast) |> 
+  flextable() |> 
+  bg(part = "header", bg = "black") |> 
+  color(part = "header", color = "white") |> 
+  bold(part = "header") |> 
+  bg(part = "body", bg = "white") |> 
+  color(part = "body", color = "black") |> 
+  hline(i = 2) |> 
+  align(part = "all", j = -1, align = "center") |> 
+  flextable::font(part = "all", fontname = "Times New Roman") |> 
+  autofit()
+
+richrate_contrast_ft |> save_as_image(path = "Results/Richness_rate_contrast.png")
 
 
 
