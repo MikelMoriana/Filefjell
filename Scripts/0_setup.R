@@ -75,9 +75,9 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
   return(plot)
 }
 
-adj_label <- c(richness = "<b>a)</b> Species<br><span style='color:transparent'>a) </span>richness", 
-               new = "<b>b)</b> New<br><span style='color:transparent'>b) </span>species", 
-               lost = "<b>c)</b> Lost<br><span style='color:transparent'>c) </span>species", 
+adj_label <- c(new = "<b>a)</b> New<br><span style='color:transparent'>b) </span>species", 
+               lost = "<b>b)</b> Lost<br><span style='color:transparent'>c) </span>species", 
+               richness = "<b>c)</b> Species<br><span style='color:transparent'>a) </span>richness", 
                elevation = "<b>d)</b> Species<br><span style='color:transparent'>d) </span>altitude",
                alpine = "Alpine",
                generalist = "Generalist",
@@ -177,26 +177,6 @@ mod_summary <- function(mod) {
     contrast = contrast,
     contrast_df = contrast_df,
     contrast_ft = contrast_ft))
-}
-
-ft_contrasts <- function(contrasts, new_name) {
-  contrasts$contrast_df |> 
-    select(!c(df, statistic)) |> 
-    mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Alpine. Period 1 - Period 2",
-                                Contrast == "1G-2G" ~ "Generalist. Period 1 - Period 2",
-                                Contrast == "1A-1G" ~ "Period 1. Alpine - Generalist",
-                                Contrast == "2A-2G" ~ "Period 2. Alpine - Generalist")) |> 
-    flextable() |> 
-    set_header_labels(Contrast = new_name) |>
-    bg(part = "header", bg = "black") |> 
-    color(part = "header", color = "white") |> 
-    bold(part = "header") |> 
-    bg(part = "body", bg = "white") |> 
-    color(part = "body", color = "black") |> 
-    hline(i = 2) |> 
-    align(part = "all", j = -1, align = "center") |> 
-    flextable::font(part = "all", fontname = "Times New Roman") |> 
-    autofit()
 }
 
 gg_results <- function(data) {
