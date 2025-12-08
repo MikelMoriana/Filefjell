@@ -220,8 +220,6 @@ turnew_results <- turnew_mod |>
   mod_summary()
 # More new species in the second period, but not significantly
 
-turnew_results |> ft_contrasts("Richness - Contrasts")
-
 
 # Lost species
 
@@ -714,12 +712,12 @@ elerate_new_results <- elerate_new_bayesh |>
 
 # Results----
 
-emmeans_overview <- richrate_results$emmeans_df |>
-  mutate(Model = "richness") |> 
-  rbind(turnew_results$emmeans_df |> 
-          mutate(Model = "new")) |>
+emmeans_overview <- turnew_results$emmeans_df |> 
+  mutate(Model = "new") |>
   rbind(turlost_results$emmeans_df |> 
           mutate(Model = "lost")) |> 
+  rbind(richrate_results$emmeans_df |>
+          mutate(Model = "richness")) |> 
   rbind(elerate_all_results$emmeans_df |> 
           mutate(df = NA_real_,
                  statistic = NA_real_,
@@ -727,35 +725,44 @@ emmeans_overview <- richrate_results$emmeans_df |>
           relocate(df, .after = Estimate) |> 
           relocate(statistic, .after = CI_upper)) |> 
   relocate(Model) |> 
-  mutate(Model = factor(Model, levels = c("richness", "new", "lost", "elevation")))
+  mutate(Model = factor(Model, levels = c("new", "lost", "richness", "elevation")))
 
-contrasts_overview <- richrate_results$contrast_df |>
-  mutate(Model = "richness") |> 
-  rbind(turnew_results$contrast_df |> 
-          mutate(Model = "new")) |>
+contrasts_overview <- turnew_results$contrast_df |> 
+  mutate(Model = "New species") |>
   rbind(turlost_results$contrast_df |> 
-          mutate(Model = "lost")) |> 
+          mutate(Model = "Lost species")) |> 
+  rbind(richrate_results$contrast_df |>
+          mutate(Model = "Richness")) |> 
   rbind(elerate_all_results$contrast_df |> 
           mutate(df = NA_real_,
                  statistic = NA_real_,
-                 Model = "elevation") |> 
+                 Model = "Elevation") |> 
           relocate(df, .after = Estimate) |> 
           relocate(statistic, .after = CI_upper)) |> 
   relocate(Model) |> 
-  mutate(Model = factor(Model, levels = c("richness", "new", "lost", "elevation")))
+  mutate(Model = factor(Model, levels = c("New species", "Lost species", "Richness", "Elevation")))
 
 contrasts_table <- contrasts_overview |>
+  select(!c(df, statistic)) |> 
+  mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Alpine. Period 1 - Period 2",
+                              Contrast == "1G-2G" ~ "Generalist. Period 1 - Period 2",
+                              Contrast == "1A-1G" ~ "Period 1. Alpine - Generalist",
+                              Contrast == "2A-2G" ~ "Period 2. Alpine - Generalist")) |> 
   flextable() |> 
   bg(part = "header", bg = "black") |> 
   color(part = "header", color = "white") |> 
   bold(part = "header") |>
   bg(part = "body", bg = "white") |> 
   color(part = "body", color = "black") |> 
-  bold(i = ~ ((CI_lower * CI_upper) > 0)) |> 
-  align(part = "all", j = 4:6, align = "center") |>
+  merge_v(j = "Model") |>
   hline(i = c(4, 8, 12)) |> 
+  hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
+  bold(i = ~ ((CI_lower * CI_upper) > 0), j = -1) |>
+  align(part = "all", j = -c(1, 2), align = "center") |> 
+  flextable::font(part = "all", fontname = "Times New Roman") |> 
+  fontsize(size = 12) |> 
   autofit()
-contrasts_table
+contrasts_table |> save_as_image(path = "Results/Rate_changes.png")
 
 
 # One ggplot
@@ -774,12 +781,6 @@ emmeans_figure |> ggsave(file = "Results/Rate_of_change.png", width = 20, height
 
 # Several ggplots
 
-richrate_figure <- richrate_results$emmeans_df |> 
-  gg_results() +
-  scale_x_continuous(limits = c(-0.4, 0.5),
-                     labels = NULL) +
-  labs(x = NULL, y = adj_label["richness"])
-
 turnew_figure <- turnew_results$emmeans_df |> 
   gg_results() +
   scale_x_continuous(limits = c(-0.4, 0.5),
@@ -788,9 +789,14 @@ turnew_figure <- turnew_results$emmeans_df |>
 
 turlost_figure <- turlost_results$emmeans_df |> 
   gg_results() +
+  scale_x_continuous(limits = c(-0.4, 0.5),
+                     labels = NULL) +
+  labs(x = NULL, y = adj_label["lost"])
+
+richrate_figure <- richrate_results$emmeans_df |> 
+  gg_results() +
   scale_x_continuous(limits = c(-0.4, 0.5)) +
-  labs(x = "Rate of change in species") +
-  labs(x = "Rate of change (number of species / year)", y = adj_label["lost"])
+  labs(x = "Rate of change (number of species / year)", y = adj_label["richness"])
 
 elerate_all_figure <- elerate_all_results$emmeans_df |> 
   gg_results() +
@@ -798,7 +804,7 @@ elerate_all_figure <- elerate_all_results$emmeans_df |>
   labs(x = "Rate of change (metres / year)", y = adj_label["elevation"])
 
 results_figure_stack <- ggarrange(
-  plotlist = list(richrate_figure, turnew_figure, turlost_figure, elerate_all_figure),
+  plotlist = list(turnew_figure, turlost_figure, richrate_figure, elerate_all_figure),
   ncol = 1,
   nrow = 4,
   align = "v",
