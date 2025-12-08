@@ -179,6 +179,26 @@ mod_summary <- function(mod) {
     contrast_ft = contrast_ft))
 }
 
+ft_contrasts <- function(contrasts, new_name) {
+  contrasts$contrast_df |> 
+    select(!c(df, statistic)) |> 
+    mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Alpine. Period 1 - Period 2",
+                                Contrast == "1G-2G" ~ "Generalist. Period 1 - Period 2",
+                                Contrast == "1A-1G" ~ "Period 1. Alpine - Generalist",
+                                Contrast == "2A-2G" ~ "Period 2. Alpine - Generalist")) |> 
+    flextable() |> 
+    set_header_labels(Contrast = new_name) |>
+    bg(part = "header", bg = "black") |> 
+    color(part = "header", color = "white") |> 
+    bold(part = "header") |> 
+    bg(part = "body", bg = "white") |> 
+    color(part = "body", color = "black") |> 
+    hline(i = 2) |> 
+    align(part = "all", j = -1, align = "center") |> 
+    flextable::font(part = "all", fontname = "Times New Roman") |> 
+    autofit()
+}
+
 gg_results <- function(data) {
   figure <- data |> 
     mutate(Period = factor(Period, levels = c("period2", "period1")),
