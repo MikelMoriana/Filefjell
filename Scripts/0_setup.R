@@ -27,7 +27,7 @@ options(scipen = 999)
 # Data cleaning----
 
 data_tidying <- function(data) {
-  data_tidy <- data %>%
+  data %>%
     clean_names() %>%
     relocate(year) %>% 
     rename(any_of(c(summit = "top", elevation = "height", elevation = "top_height", weather = "vaer"))) %>%
@@ -35,9 +35,8 @@ data_tidying <- function(data) {
            across(any_of("date"), ~ dmy(.x)),
            across(any_of("weather"), ~ str_replace_all(.x, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))),
            across(any_of("recorder"), ~ str_replace_all(.x, c(" \\+ " = "_", "\\+" = "_"))),
-           species = str_replace_all(species, c(" " = "_", "\\." = ""))) %>%
-    arrange(desc(elevation), species)
-  return(data_tidy)
+           across(any_of("species"), ~ str_replace_all(.x, c(" " = "_", "\\." = "")))) %>%
+    mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Rjupeskareggen", "Krekanosi", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
 }
 
 
@@ -183,13 +182,13 @@ gg_results <- function(data) {
   figure <- data |> 
     mutate(Period = factor(Period, levels = c("period2", "period1")),
            Specialism = factor(Specialism, levels = c("generalist", "alpine"))) |>
-    ggplot(aes(x = Estimate, y = Period, colour = Specialism)) +
+    ggplot(aes(x = Estimate, y = Specialism, colour = Period)) +
     theme_minimal() +
     geom_vline(xintercept = 0, colour = "black") +
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
     geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = position_dodge(width = 0.6)) +
     scale_y_discrete(labels = adj_label) +
-    scale_colour_manual("Specialism", values = colour_mapping$category, labels = adj_label) +
+    scale_colour_manual("Period", values = colour_mapping$period, labels = adj_label) +
     guides(colour = guide_legend(reverse = TRUE)) +
     theme(text = element_text(size = 14, family = "serif"),
           axis.title.x = element_text(hjust = 0.35),
