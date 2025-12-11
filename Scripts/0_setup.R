@@ -17,7 +17,11 @@ conflicts_prefer(
   brms::ar,
   brms::lognormal,
   stats::chisq.test,
-  stats::fisher.test
+  stats::fisher.test,
+  flextable::border,
+  flextable::compose,
+  flextable::font,
+  flextable::rotate
 )
 
 options(scipen = 999)
@@ -85,7 +89,7 @@ adj_label <- c(new = "<b>a)</b> New<br><span style='color:transparent'>b) </span
 
 colour_mapping <-  list(
   period = c("period1" = "#859395", "period2" = "#f58800"),
-  category = c("alpine" = "#859395", "generalist" = "#f58800")
+  specialization = c("alpine" = "#859395", "generalist" = "#f58800")
 )
 
 
@@ -127,15 +131,14 @@ mod_summary <- function(mod) {
     hline(i = c(1, 3))
 
   ## Emmeans
-  # Extract yearly trends
-  emmeans <- emmeans(mod, ~ period * category)
+  emmeans <- emmeans(mod, ~ period * specialization)
   # Arrange as dataframe
   emmeans_df <- emmeans %>%
     tidy(conf.int = TRUE) %>%
     mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
            p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
     relocate(std.error, .after = estimate) %>%
-    rename(Period = period, Specialism = category, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    rename(Period = period, Specialization = specialization, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
   emmeans_ft <-  emmeans_df %>%
@@ -146,7 +149,7 @@ mod_summary <- function(mod) {
 
   ## Contrasts
   ref_grid <- emmeans |> summary()
-  contrast_numbers <- unique(ref_grid[c("period", "category")])
+  contrast_numbers <- unique(ref_grid[c("period", "specialization")])
   # Perform contrast analysis with only the desired contrast
   contrast <- emmeans %>%
     contrast(method = contrast_matrix)
@@ -181,8 +184,8 @@ mod_summary <- function(mod) {
 gg_results <- function(data) {
   figure <- data |> 
     mutate(Period = factor(Period, levels = c("period2", "period1")),
-           Specialism = factor(Specialism, levels = c("generalist", "alpine"))) |>
-    ggplot(aes(x = Estimate, y = Specialism, colour = Period)) +
+           Specialization = factor(Specialization, levels = c("generalist", "alpine"))) |>
+    ggplot(aes(x = Estimate, y = Specialization, colour = Period)) +
     theme_minimal() +
     geom_vline(xintercept = 0, colour = "black") +
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
