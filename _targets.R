@@ -272,12 +272,14 @@ list(
                 by = c("summit", "main_type")) |>
       relocate(percentage, .after = main_type) |>
       left_join(summit_data_tidy |>
-                  select(summit, elevation) |>
+                  select(summit, elevation, area) |>
                   rename(elevation_correct = elevation),
                 by = "summit") |>
       select(!elevation) |>
-      rename(elevation = elevation_correct) |>
-      relocate(elevation, .after = summit) |>
+      rename(elevation = elevation_correct, summit_area = area) |>
+      mutate(area = summit_area * percentage / 100) |>
+      relocate(c(elevation, summit_area), .after = summit) |>
+      relocate(area, .after = percentage) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
       arrange(summit, year, species)
   ),
