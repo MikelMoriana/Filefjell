@@ -254,25 +254,27 @@ elevation_data_clean <- elevation_1972_clean |>
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |> 
   arrange(summit, year, species)
 
-type_species_clean <- type_species_tidy |> 
-  mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo", 
-                             TRUE ~ species)) |> 
-  left_join(filefjell_species, by = "species") |> 
-  mutate(species = ifelse(!is.na(new_name), new_name, species)) |> 
-  relocate(specialization, .before = species) |> 
-  select(!new_name) |> 
-  left_join(maintype_cover_tidy |> 
+type_species_clean <- type_species_tidy |>
+  mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo",
+                             TRUE ~ species)) |>
+  left_join(filefjell_species, by = "species") |>
+  mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
+  relocate(specialization, .before = species) |>
+  select(!new_name) |>
+  left_join(maintype_cover_tidy |>
               select(summit, main_type, percentage),
-            by = c("summit", "main_type")) |> 
-  relocate(percentage, .after = main_type) |> 
+            by = c("summit", "main_type")) |>
+  relocate(percentage, .after = main_type) |>
   left_join(summit_data_tidy |>
-              select(summit, elevation) |> 
+              select(summit, elevation, area) |>
               rename(elevation_correct = elevation),
             by = "summit") |>
-  select(!elevation) |> 
-  rename(elevation = elevation_correct) |> 
-  relocate(elevation, .after = summit) |> 
-  mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |> 
+  select(!elevation) |>
+  rename(elevation = elevation_correct, summit_area = area) |>
+  mutate(area = summit_area * percentage / 100) |>
+  relocate(c(elevation, summit_area), .after = summit) |>
+  relocate(area, .after = percentage) |>
+  mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
   arrange(summit, year, species)
 
 elevation_data_clean |> write_csv("data_clean/Elevation_data_clean.csv")
