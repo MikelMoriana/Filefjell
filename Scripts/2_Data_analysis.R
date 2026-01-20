@@ -1,7 +1,5 @@
 # Libraries----
 
-library(vegan)
-
 source("Scripts/0_setup.R")
 
 
@@ -61,6 +59,9 @@ turnover_grouped <- turnover_species |>
   summarise(.by = c("specialization", "development"), total = n() / 2) |> # Divide by two since for each species we have two rows, one per period
   arrange(development, specialization)
 
+turnover_bydevelopment <- turnover_species |> 
+  summarise(.by = c("development"), total = n() / 2) # Divide by two since for each species we have two rows, one per period
+
 
 # By summit
 
@@ -98,7 +99,7 @@ summit_data <- tar_read(summit_data_tidy)
 turnover_area <- turnover_species |> 
   left_join(summit_data, by = c("summit", "elevation"))
 turnover_area_grouped <- turnover_area |> 
-  summarise(.by = c(elevation, area, bedrock, development), 
+  summarise(.by = c(elevation, summit_decare, bedrock, development), 
             total = n())
 
 
@@ -151,25 +152,18 @@ elerate_new <- elevation_wide_new |>
 
 ## Nature type----
 
-filefjell_2024_2025_clean <- tar_read(filefjell_2024_2025_clean)
+type_species <- tar_read(type_species_clean)
 
-# nature_types
+new_species_2024_2025 <- turnover_species |> 
+  filter(period == "period2", turnover2 == 1) |> 
+  select(summit:species)
 
-# colonizers_data <- filefjell_2024_clean |> 
-#   semi_join(
-#     turnover_species_data |> 
-#       filter(turnover24 == 1) |> 
-#       select(summit:species)) |> 
-#   mutate(hovedtype = str_extract(type, "[^C]*")) |> 
-#   relocate(hovedtype, .before = type)
-# 
-# colonizers_hovedtype_data <- colonizers_data |> 
-#   summarise(.by = c(summit, hovedtype, cover), 
-#             new_species = n()) |> 
-#   left_join(filefjell_2024_clean |> summarise(.by = c(summit, hovedtype), total_species = n())) |> 
-#   mutate(hovedtype = as.factor(hovedtype), 
-#          new_area = new_species / cover, 
-#          ratio_species = (new_species / total_species) * 0.999 + 0.0005)
+new_species_types <- type_species |> 
+  right_join(new_species_2024_2025, by = c("summit", "elevation", "specialization", "species")) |> 
+  mutate(habitat_decare = ifelse(is.na(habitat_decare), 0.25, habitat_decare)) |> 
+  summarise(.by = c(summit, elevation, summit_decare, specialization, main_type, habitat_decare), total = n()) |> 
+  mutate(main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7")))
+
 
 # community_order <- community_data |> 
 #   select(-c(height, no_species)) |> 
@@ -192,7 +186,88 @@ filefjell_2024_2025_clean <- tar_read(filefjell_2024_2025_clean)
 
 # Turnover overview----
 
-# Overview tables
+### Overview tables
+
+# General
+
+status_year <- turnover_species |> 
+  filter(period == "period1") |> 
+  select(!c(elevation, specialization, development:rate, turnover1:rate2)) |> 
+  mutate(first = case_when(presence1 == 1 ~ "1972Present",
+                           presence1 == 0 ~ "1972Absent")) |> 
+  mutate(second = case_when(presence1 == 1 & presence2 == 1 ~ "2009Remained",
+                            presence1 == 1 & presence2 == 0 ~ "2009Lost",
+                            presence1 == 0 & presence2 == 1 ~ "2009New",
+                            presence1 == 0 & presence2 == 0 ~ "2009Absent")) |> 
+  mutate(third = case_when(presence1 == 1 & presence2 == 1 & presence3 == 1 ~ "2024Remained",
+                           presence1 == 1 & presence2 == 1 & presence3 == 0 ~ "2024Lost",
+                           presence1 == 1 & presence2 == 0 & presence3 == 1 ~ "2024Reappeared",
+                           presence1 == 1 & presence2 == 0 & presence3 == 0 ~ "2024Stayed_lost",
+                           presence1 == 0 & presence2 == 1 & presence3 == 1 ~ "2024Stayed",
+                           presence1 == 0 & presence2 == 1 & presence3 == 0 ~ "2024Disappeared",
+                           presence1 == 0 & presence2 == 0 & presence3 == 1 ~ "2024New")) |> 
+  select(first:third) |> 
+  pivot_longer(cols = first:third, names_to = "survey", values_to = "status") |> 
+  summarise(.by = "status", total = n()) |> 
+  arrange(status)
+
+header_map <- tibble(
+  col_keys = c("1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
+  level1   = c("1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
+)
+
+status_year_ft <- tibble(
+  "1972status" = c("Present", 
+                rep("", 6),
+                "Total present"),
+  "1972total" = c(status_year |> filter(status == "1972Present") |> pull(total),
+                rep("", 6),
+                status_year |> filter(status == "1972Present") |> pull(total)),
+  "2008/09status" = c("Remained", "", "Disappeared", "", "Appeared", "", "", "Total present"),
+  "2008/09total" = c(status_year |> filter(status == "2009Remained") |> pull(total), "",
+                status_year |> filter(status == "2009Lost") |> pull(total), "",
+                status_year |> filter(status == "2009New") |> pull(total), "", "",
+                (status_year |> filter(status == "2009Remained") |> pull(total)) + (status_year |> filter(status == "2009New") |> pull(total))),
+  "2024/25status" = c("Remained", "Disappeared", "Reappeared", "Did not reappear", "Remained", "Disappeared", "Appeared", "Total present"),
+  "2024/25total" = c(status_year |> filter(status == "2024Remained") |> pull(total),
+                status_year |> filter(status == "2024Lost") |> pull(total),
+                status_year |> filter(status == "2024Reappeared") |> pull(total),
+                status_year |> filter(status == "2024Stayed_lost") |> pull(total),
+                status_year |> filter(status == "2024Stayed") |> pull(total),
+                status_year |> filter(status == "2024Disappeared") |> pull(total),
+                status_year |> filter(status == "2024New") |> pull(total),
+                (status_year |> filter(status == "2024Remained") |> pull(total)) + (status_year |> filter(status == "2024Reappeared") |> pull(total)) + (status_year |> filter(status == "2024Stayed") |> pull(total)) + (status_year |> filter(status == "2024New") |> pull(total)))
+) |> 
+  flextable() |>
+  set_header_df(mapping = header_map, key = "col_keys") |> 
+  merge_h(part = "header") |> 
+  bg(part = "header", bg = "black") |> 
+  color(part = "header", color = "white") |> 
+  bold(part = "header") |> 
+  align(part = "header", align = "center") |> 
+  bg(part = "body", bg = "white") |> 
+  color(part = "body", color = "black") |> 
+  bg(part = "body", i = 8, bg = "grey") |> 
+  # color(part = "body", color = "black") |> 
+  hline(i = 4) |>
+  hline(i = 2, j = 3:6) |> 
+  hline(i = 6, j = 3:6) |> 
+  hline(i = 7) |> 
+  border(i = c(1:6, 8), j = 3, border.left = officer::fp_border(color = "black")) |> 
+  border(i = 1:8, j = 5, border.left = officer::fp_border(color = "black")) |>
+  border(part = "header", border.left = officer::fp_border(color = "white")) |> 
+  vline_left() |> 
+  vline_right() |> 
+  align(part = "body", align = "left") |> 
+  align(part = "body", j = c(2, 4, 6), align = "center") |> 
+  flextable::font(part = "all", fontname = "Times New Roman") |> 
+  autofit()
+status_year_ft
+
+status_year_ft |> save_as_image(path = "Results/Status_year.png")
+
+
+# By specialization
 
 turnover_grouped |> 
   pivot_wider(names_from = specialization, values_from = total)
@@ -444,7 +519,7 @@ richrate_results <- richrate_modh |>
 
 # Elevation change - Only species we have data for----
 
-## Model
+#### Frequentist analysis
 
 elerate_all |> 
   ggplot() +
@@ -461,313 +536,287 @@ elerate_all_mod |> model_homoscedasticity()
 elerate_all_mod |> summary()
 
 
-# No distributions I try get closely to fitting. I try bayesian. THIS IS NOT FINISHED, I FOCUS ON NEW
 
-elerate_all_gbayes <- brm(
-  rate ~ 
-    period * specialization + (1|summit) + (1|species),
-  family = gaussian(), 
+#### No distributions I try get closely to fitting. I try bayesian
+
+### 1. Choosing weakly informative priors
+# Response scale. The rate of elevation change will not go beyond -2.133 to 2.133 (32 metres in 15 years, highest possible change in shortest time span between surveys)
+# Fixed effects
+
+priors_g1 <- c(
+  prior(normal(0, 0.5), class = "Intercept"), # small positive mean for response variable
+  prior(normal(0, 0.5), class = "b"),            # fixed effects
+  prior(exponential(3), class = "sigma"),        # residual SD
+  prior(exponential(3), class = "sd")           # all RE SDs (summit, species)
+)
+
+## Gaussian
+
+elerate_all_gmod1 <- brm(
+  bf(rate ~
+       period * specialization + (1|summit) + (1|species)),
+  family = gaussian(),
+  prior = priors_g1,
+  sample_prior = "only",
   data = elerate_all,
-  seed = 811)
-withr::with_seed(811, pp_check(elerate_all_gbayes, type = "dens_overlay")) # The shape does not really fit, though the range is similar
+  chains = 4, iter = 2000, seed = 811
+)
 
-elerate_all_tbayes <- brm(
-  rate ~ 
-    period * specialization + (1|summit) + (1|species),
-  family = student(), 
+elerate_all_expla1 <- crossing(
+  period = unique(elerate_all$period),
+  specialization = unique(elerate_all$specialization),
+  summit = NA,
+  species = NA
+)
+
+elerate_all_gpred1 <- elerate_all_gmod1 %>%
+  add_predicted_draws(newdata = elerate_all_expla1, re_formula = NA) %>%
+  mutate(in_range = between(.prediction, -2, 2))
+
+elerate_all_gsumm1 <- elerate_all_gpred1 %>%
+  group_by(period, specialization) %>%
+  summarise(
+    p_in_range = mean(in_range),
+    q05 = quantile(.prediction, 0.05),
+    q50 = quantile(.prediction, 0.50),
+    q95 = quantile(.prediction, 0.95),
+    .groups = "drop"
+  )
+
+elerate_all_gsumm1
+# Between 97.2 and 98.3% of prior predictions fall within [-2, 2]. Good priors
+
+
+## Student t
+
+priors_t1 <- c(
+  priors_g1,
+  prior(gamma(2, 0.4), class = "nu")  # mean ~5, moderate heavy tails
+)
+
+elerate_all_tmod1 <- brm(
+  bf(rate ~
+       period * specialization + (1|summit) + (1|species)),
+  family = student(),
+  prior = priors_t1,
+  sample_prior = "only",
   data = elerate_all,
-  seed = 811)
-withr::with_seed(811, pp_check(elerate_all_tbayes, type = "dens_overlay")) # Some extreme values 
+  chains = 4, iter = 2000,  seed = 811
+)
 
-loo(elerate_all_gbayes, elerate_all_tbayes) # It seems student t is better, we have to fix the priors to our expectations
-# I have also tried beta (using 32 as maximum possible change), but doesn't really fit (not good for a peak)
+elerate_all_tpred1 <- elerate_all_tmod1 %>%
+  add_predicted_draws(newdata = elerate_all_expla1, re_formula = NA) %>%
+  mutate(in_range = between(.prediction, -2, 2))
 
-elerate_all_tbayesp <- brm(
-  rate ~ 
-    period * specialization + (1 | summit) + (1 | species), 
-  family = student(), 
-  prior = c(
-    prior(normal(0, 0.5), class = "b"),
-    prior(normal(0, 0.5), class = "Intercept"),
-    prior(student_t(3, 0, 0.3), class = "sigma"),
-    prior(gamma(80, 1), class = "nu")
-    ),
-  control = list(adapt_delta = 0.999),
+elerate_all_tsumm1 <- elerate_all_tpred1 %>%
+  group_by(period, specialization) %>%
+  summarise(
+    p_in_range = mean(in_range),
+    q05 = quantile(.prediction, 0.05),
+    q50 = quantile(.prediction, 0.50),
+    q95 = quantile(.prediction, 0.95),
+    .groups = "drop"
+  )
+
+elerate_all_tsumm1
+
+
+### 2. Comparing gaussian and student t
+
+elerate_all_gmod2 <- brm(
+  bf(rate ~ 
+       period * specialization + (1|summit) + (1|species)),
+  family = gaussian(),
+  prior = priors_g1,
   data = elerate_all,
-  seed = 811
-) # 65, 70, 75, 80, 85
-withr::with_seed(811, pp_check(elerate_all_tbayesp, type = "dens_overlay", size = 2))
-
-loo(elerate_all_tbayes, elerate_all_tbayesp) # The one without priors seems slightly better, but the posterior distribution doesn't match, we keep use priors
-
-
-## Diagnosis
-
-# Model convergence and sample quality
-elerate_all_tbayesp |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
-elerate_all_tbayesp |> plot() # hairy caterpillars
-
-# Posterior predictive check
-withr::with_seed(811, pp_check(elerate_all_tbayesp, type = "dens_overlay"))
-
-# Residuals
-elerate_bayes_res <- tibble(
-  fitted = fitted(elerate_all_tbayesp)[, "Estimate"],
-  residuals = residuals(elerate_all_tbayesp)[, "Estimate"],
-  period = elerate_all$period,
-  specialization = elerate_all$specialization,
-  summit = elerate_all$summit,
-  species = elerate_all$species
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
 )
-ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = specialization)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
 
-# It seems there might be some heteroskedasticity, with period 2 having greater variance
-pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
-pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "specialization") # Quite similar
-
-
-
-### Model 2
-
-# elerate_all_bayesh <- brm(
-#   bf(rate ~ 
-#     period * specialization + (1|summit) + (1|species),
-#     sigma ~period),
-#   family = student(), 
-#   prior = c(
-#     prior(normal(0, 0.5), class = "b"),
-#     prior(normal(0, 0.5), class = "Intercept"),
-#     prior(gamma(46, 1), class = "nu")
-#   ),
-#   data = elerate_all,
-#   control = list(adapt_delta = 0.999),
-#   seed = 811
-#   )
-elerate_all_bayesh <- tar_read(elerate_all_bayes)
-withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay", size = 1))
-loo(elerate_all_tbayesp, elerate_all_bayesh)
-
-## Diagnosis
-
-# Model convergence and sample quality
-elerate_all_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
-elerate_all_bayesh |> plot() # hairy caterpillars
-
-# Posterior predictive check
-withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay")) # The range is slightly too wide. I continue, and see afterwards what to adjust
-
-# Residuals
-elerate_all_bayesh_res <- tibble(
-  fitted = fitted(elerate_all_bayesh)[, "Estimate"],
-  residuals = residuals(elerate_all_bayesh)[, "Estimate"],
-  period = elerate_all$period,
-  specialization = elerate_all$specialization,
-  summit = elerate_all$summit,
-  species = elerate_all$species
+# Student-t, sigma constant
+elerate_all_tmod2 <- brm(
+  bf(rate ~ 
+       period * specialization + (1|summit) + (1|species)),
+  family = student(),
+  prior = priors_t1,
+  data = elerate_all,
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
 )
-ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-# Maybe more variance in period 2, but it looks quite good
-withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
-
-ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "specialization"))
-
-# Random effect structure
-elerate_all_bayesh |> ranef()
-elerate_all_bayesh |> VarCorr()
-elerate_all_bayesh |> bayes_R2()
-
-# Outliers
-elerate_all_bayesh |> loo() # No influential points
-
-# Summary
-elerate_all_bayesh |> summary()
-
-elerate_all_results <- elerate_all_bayesh |>
-  mod_summary()
-  
 
 
+elerate_all_gloo2 <- loo(elerate_all_gmod2, save_psis = TRUE)  # PSIS-LOO
+elerate_all_tloo2 <- loo(elerate_all_tmod2, save_psis = TRUE)
 
-## Elevation change. Only species present all years----
+# Side-by-side comparison
+loo_compare(elerate_all_gloo2, elerate_all_tloo2)
 
-# elerate_rem_bayesh <- brm(
-#   bf(rate ~ 
-#        period * specialization + (1|summit) + (1|species),
-#      sigma ~period),
-#   family = student(), 
-#   prior = c(
-#     prior(normal(0, 0.5), class = "b"),
-#     prior(normal(0, 0.5), class = "Intercept"),
-#     prior(gamma(45, 1), class = "nu")
-#   ),
-#   data = elerate_remained,
-#   control = list(adapt_delta = 0.999),
-#   seed = 811
-# )
-elerate_rem_bayesh <- tar_read(elerate_rem_bayes)
+table(cut(elerate_all_gloo2$diagnostics$pareto_k, c(-Inf, 0.5, 0.7, 1, Inf)))
+table(cut(elerate_all_tloo2$diagnostics$pareto_k, c(-Inf, 0.5, 0.7, 1, Inf)))
 
-## Diagnosis
+pp_check(elerate_all_gmod2, type = "ecdf_overlay_grouped", group = "period")
+pp_check(elerate_all_tmod2, type = "ecdf_overlay_grouped", group = "period")
+pp_check(elerate_all_gmod2, type = "dens_overlay_grouped", group = "period")
+pp_check(elerate_all_tmod2, type = "dens_overlay_grouped", group = "period")
 
-# Model convergence and sample quality
-elerate_rem_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
-elerate_rem_bayesh |> plot() # hairy caterpillars
+elerate_all_rates <- elerate_all$rate
+elerate_all_grates2 <- posterior_predict(elerate_all_gmod2, draws = 1000)
+elerate_all_trates2 <- posterior_predict(elerate_all_tmod2, draws = 1000)
 
-# Posterior predictive check
-withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay", size = 2)) # The range is slightly too wide. I continue, and see afterwards what to adjust
+ppc_loo_pit_qq(elerate_all_rates, elerate_all_grates2, psis_object = elerate_all_gloo2$psis_object)
+ppc_loo_pit_qq(elerate_all_rates, elerate_all_trates2, psis_object = elerate_all_tloo2$psis_object)
 
-# Residuals
-elerate_rem_bayesh_res <- tibble(
-  fitted = fitted(elerate_rem_bayesh)[, "Estimate"],
-  residuals = residuals(elerate_rem_bayesh)[, "Estimate"],
-  period = elerate_remained$period,
-  specialization = elerate_remained$specialization,
-  summit = elerate_remained$summit,
-  species = elerate_remained$species
+# nu
+
+elerate_all_draws2 <- as_draws_df(elerate_all_tmod2)
+elerate_all_nu2 <- elerate_all_draws2 %>%
+  summarise(
+    nu_mean = mean(nu),
+    nu_median = median(nu),
+    nu_q05 = quantile(nu, 0.05),
+    nu_q95 = quantile(nu, 0.95)
+  )
+elerate_all_nu2
+
+# We have an extremely low nu. We explore what this means
+# i.e.: is there actually such heavy tails, or is it indicative of missing variance structure?
+
+### 3.Seeing whether there's heteroskedasticity, and if the extreme nu can be caused by it
+
+log(1/3)
+priors_t3 <- c(
+  # Mean model (as before)
+  prior(normal(0, 0.5), class = "Intercept"),
+  prior(normal(0, 0.5), class = "b"),
+  prior(exponential(3), class = "sd"),
+  prior(gamma(2, 0.4), class = "nu"),
+  # Sigma model (log-scale)
+  prior(normal(-1.098612, 0.5), class = "Intercept", dpar = "sigma"), 
+  prior(normal(0, 0.3), class = "b", dpar = "sigma")
 )
-ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-# Maybe more variance in period 2, but it looks quite good
-withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "period"))
+# For sigma, I tried 0.5 for intercept and 0.3 for b (instead of 0.3 and 0.2), but it resulted in one -inf value, and the brm function stopped
 
-ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-# Maybe more variance in period 2, but it looks quite good
-withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "specialization"))
-
-# Random effect structure
-elerate_rem_bayesh |> ranef()
-elerate_rem_bayesh |> VarCorr()
-elerate_rem_bayesh |> bayes_R2()
-
-# Outliers
-elerate_rem_bayesh |> loo() # No influential points
-
-# Summary
-elerate_rem_bayesh |> summary()
-
-elerate_rem_results <- elerate_rem_bayesh |> 
-  mod_summary()
-
-
-
-
-## Elevation change Including new species----
-
-# elerate_new_bayesh <- brm(
-#   bf(rate ~ 
-#        period * specialization + (1|summit) + (1|species),
-#      sigma ~period),
-#   family = student(),
-#   data = elerate_new,
-#   control = list(adapt_delta = 0.999),
-#   seed = 811
-# )
-elerate_new_bayesh <- tar_read(elerate_new_bayes)
-withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) 
-
-
-## Diagnosis
-
-# Model convergence and sample quality
-elerate_new_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
-elerate_new_bayesh |> plot() # hairy caterpillars
-
-# Posterior predictive check
-withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) # Correct range, but misses the slight bump on the positive side
-
-# Residuals
-elerate_new_bayesh_res <- tibble(
-  fitted = fitted(elerate_new_bayesh)[, "Estimate"],
-  residuals = residuals(elerate_new_bayesh)[, "Estimate"],
-  period = elerate_new$period,
-  specialization = elerate_new$specialization,
-  summit = elerate_new$summit,
-  species = elerate_new$species
+elerate_all_tmod3per <- brm(
+  bf(rate ~ 
+       period * specialization + (1|summit) + (1|species),
+     sigma ~ period),
+  family = student(),
+  prior = priors_t3,
+  data = elerate_all,
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
 )
-ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "period")) # Some heteroskedasticity, but doesn't look that bad
+
+elerate_all_tmod3spe <- brm(
+  bf(rate ~ 
+       period * specialization + (1|summit) + (1|species),
+     sigma ~ specialization),
+  family = student(),
+  prior = priors_t3,
+  data = elerate_all,
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
+)
+
+elerate_all_tmod3perspe <- brm(
+  bf(rate ~ 
+       period * specialization + (1|summit) + (1|species),
+     sigma ~ period + specialization),
+  family = student(),
+  prior = priors_t3,
+  data = elerate_all,
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
+)
+
+elerate_all_tmod3perspeplus <- brm(
+  bf(rate ~ 
+       period * specialization + (1|summit) + (1|species),
+     sigma ~ period * specialization),
+  family = student(),
+  prior = priors_t3,
+  data = elerate_all,
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
+)
+
+loo_compare(loo(elerate_all_tmod2), 
+            loo(elerate_all_tmod3per), 
+            loo(elerate_all_tmod3spe), 
+            loo(elerate_all_tmod3perspe),
+            loo(elerate_all_tmod3perspeplus))
+posterior_summary(elerate_all_tmod2, variable = "nu")
+posterior_summary(elerate_all_tmod3per, variable = "nu")
+posterior_summary(elerate_all_tmod3spe, variable = "nu")
+posterior_summary(elerate_all_tmod3perspe, variable = "nu")
+posterior_summary(elerate_all_tmod3perspeplus, variable = "nu")
+# We keep the per model. period improves drastically the fit, and increases nu. Specialization does not do it. The additive and interactive models are slightly better, but the improvement is within 1 SD. So they add complexity without improving the results notably
 
 
-ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
-  geom_point(size = 3) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  labs(
-    x = "Fitted values",
-    y = "Residuals",
-    title = "Residuals vs Fitted Values"
-  ) +
-  theme_minimal()
-withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "specialization"))
 
-# Random effect structure
-elerate_new_bayesh |> ranef()
-elerate_new_bayesh |> VarCorr()
-elerate_new_bayesh |> bayes_R2()
+### 4. Model validation
 
-# Outliers
-elerate_new_bayesh |> loo() # No influential points
+elerate_all_tmod3per |> summary()
+# Rhat = 1.00 for all parameters
+# Bulk and Tail Effective sample size > 1000 for all parameters
+# No divergences
 
-# Summary
-elerate_new_bayesh |> summary()
+pp_check(elerate_all_tmod3per, type="dens_overlay_grouped", group="period")
+pp_check(elerate_all_tmod3per, type="ecdf_overlay_grouped", group="period")
 
-elerate_new_results <- elerate_new_bayesh |> 
-  mod_summary()
+
+elerate_all_t3per_rates <- elerate_all$rate
+elerate_all_t3per_pred <- posterior_predict(elerate_all_tmod3per, draws = 1000)
+elerate_all_t3per_loo <- loo(elerate_all_tmod3per, save_psis = TRUE)
+
+ppc_loo_pit_qq(elerate_all_t3per_rates, 
+               elerate_all_t3per_pred, 
+               psis_object = elerate_all_t3per_loo$psis_object)
+# The model slightly overestimates tail heaviness, but is well-calibrated for the central mass
+
+
+### 5. Interpret model parameters
+
+# Alpine species did not move systematically in any of the periods. Generalists moved slightly more than specialists in the first period, but not in the second
+# There have been more heterogeneity in elevational movement in the second period than in the first - Period explains an increase in variability
+
+# While mean elevational movement remains near zero for both sampling periods, residual variation increased more than threefold in the second period, indicating that species responses have become substantially more heterogeneous under recent climatic conditions.
+
+# Little difference among species or summits
+
+# Most species show modest movement, but a few exhibit surprisingly large shifts
+
+
+### 6. Post hoc
+
+elerate_all_tmod3per |> mod_summary()
+# Post-hoc analyses of mean elevational change
+
+elerate_all_t3per_sigma <- elerate_all_tmod3per |> 
+  spread_draws(b_sigma_Intercept, b_sigma_periodperiod2) |> 
+  mutate(
+    sigma_period1 = exp(b_sigma_Intercept),
+    sigma_period2 = exp(b_sigma_Intercept + b_sigma_periodperiod2),
+    diff = sigma_period2 - sigma_period1,
+    ratio = sigma_period2 / sigma_period1
+    )
+
+elerate_all_t3per_sigma_summary <- elerate_all_t3per_sigma %>%
+  summarise(
+    mean_sigma1 = mean(sigma_period1),
+    mean_sigma2 = mean(sigma_period2),
+    mean_diff   = mean(diff),
+    mean_ratio  = mean(ratio),
+    pr_sigma2_gt_sigma1 = mean(sigma_period2 > sigma_period1),
+    ci_sigma1_low  = quantile(sigma_period1, 0.025),
+    ci_sigma1_high = quantile(sigma_period1, 0.975),
+    ci_sigma2_low  = quantile(sigma_period2, 0.025),
+    ci_sigma2_high = quantile(sigma_period2, 0.975),
+    ci_ratio_low   = quantile(ratio, 0.025),
+    ci_ratio_high  = quantile(ratio, 0.975)
+  )
+
+# Residual variation in elevational movement increased more than threefold between sampling periods (posterior mean ratio σ₂/σ₁ = 3.25, 95% HPD: 2.68–3.94), with posterior probability P(σ₂ > σ₁) ≈ 1. This indicates a substantial rise in the heterogeneity of species’ responses to recent climatic conditions, despite no strong change in average elevational movement.
 
 
 
@@ -858,12 +907,12 @@ turlost_figure <- turlost_results$emmeans_df |>
 richrate_figure <- richrate_results$emmeans_df |> 
   gg_results() +
   scale_x_continuous(limits = c(-0.4, 0.5)) +
-  labs(x = "Rate of change (number of species / year)", y = adj_label["richness"])
+  labs(x = "Rate (number of species / year)", y = adj_label["richness"])
 
 elerate_all_figure <- elerate_all_results$emmeans_df |> 
   gg_results() +
   scale_x_continuous(limits = c(-0.06, 0.10)) +
-  labs(x = "Rate of change (metres / year)", y = adj_label["elevation"])
+  labs(x = "Rate (metres / year)", y = adj_label["elevation"])
 
 results_figure_stack <- ggarrange(
   plotlist = list(turnew_figure, turlost_figure, richrate_figure, elerate_all_figure),
@@ -874,12 +923,83 @@ results_figure_stack <- ggarrange(
   heights = c(1, 1, 1.68, 1.68)
 )
 results_figure_stack
-results_figure_stack |> ggsave(file = "Results/Rate_of_change_stack.png", width = 20, height = 15, units = "cm")
+results_figure_stack |> ggsave(file = "Results/Rate_of_change_period.png", width = 20, height = 15, units = "cm")
+
+
+### For the appendix
+
+eleextra_emmeans <- elerate_all_results$emmeans_df |> 
+  select(!c(SE, p_value)) |> 
+  mutate(Model = "all") |> 
+  rbind(elerate_rem_results$emmeans_df |> 
+          select(!c(SE, p_value)) |> 
+          mutate(Model = "rem")) |> 
+  rbind(elerate_new_results$emmeans_df |> 
+          select(!c(SE, p_value)) |> 
+          mutate(Model = "newer")) |> 
+  relocate(Model) |> 
+  mutate(Model = factor(Model, levels = c("all", "rem", "newer")))
+
+eleextra_figure <- eleextra_emmeans |> gg_results() +
+  facet_grid(rows = vars(Model), switch = "y", labeller = as_labeller(adj_label)) +
+  scale_y_discrete(position = "right", labels = adj_label) +
+  labs(x = "Rate of change") +
+  theme(panel.spacing.y = unit(1, "lines"),
+        text = element_text(size = 16),
+        strip.text.y.left = element_markdown(angle = 0, hjust = 0),
+        axis.title.y = element_blank())
+eleextra_figure |> ggsave(file = "Results/Extra/Altitudinal_change.png", width = 20, height = 15, units = "cm")
 
 
 
 
-# New_species ~ ...----
+# Nature type ~ ...----
+
+new_species_types |> 
+  ggplot() +
+  geom_histogram(aes(x = total))
+
+newtypes_mod <- glmmTMB(
+  total ~
+    main_type + offset(log(habitat_decare)) + (1 | summit),
+  family = nbinom2(),
+  data = new_species_types
+)
+# I've tried including specialization and there is no difference
+
+newtypes_mod |> model_diagnosis()
+newtypes_mod |> model_homoscedasticity()
+newtypes_mod |> summary()
+
+newtypes_results <- newtypes_mod |> 
+  mod_types()
+
+newtypes_figure <- newtypes_results$emmeans_df |> 
+  mutate(letters = c("A", "A", "B", "C", "C", "BC")) |> 
+  ggplot(aes(x = Estimate, y = Habitat)) +
+  theme_minimal() +
+  geom_vline(xintercept = 0, colour = "black") +
+  geom_point(size = 3) +
+  geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4) +
+  geom_text(aes(x = CI_upper + 0.4, label = letters)) +
+  scale_x_continuous(name = "Number of new species / Decare") +
+  scale_y_discrete(labels = adj_label, limits = rev) +
+  theme(text = element_text(size = 14, family = "serif"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(hjust = 0.35),
+        axis.text.x = element_text(margin = margin(t = 10, b = 10)),
+        panel.grid.major.y = element_blank(),
+        legend.position = "top",
+        legend.box.margin = margin(l = -10),
+        legend.title = element_text(margin = margin(b = 5, r = 40)),
+        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
+newtypes_figure
+newtypes_figure |> ggsave(file = "Results/Habitat_types.png", width = 20, height = 15, units = "cm")
+
+
+
+
+
 
 summit_area_new |> ggplot() + geom_point(aes(x = area, y = total)) + facet_wrap(~development)
 summit_area_new |> ggplot() + geom_point(aes(x = elevation, y = total)) + facet_wrap(~development)
@@ -1113,3 +1233,311 @@ elevation_change_rate_mod |> summary()
 # 
 # ## Modelling
 # 
+elerate_all_gbayes <- brm(
+  rate ~ 
+    period * specialization + (1|summit) + (1|species),
+  family = gaussian(), 
+  data = elerate_all,
+  seed = 811)
+withr::with_seed(811, pp_check(elerate_all_gbayes, type = "dens_overlay")) # The shape does not really fit, though the range is similar
+
+elerate_all_tbayes <- brm(
+  rate ~ 
+    period * specialization + (1|summit) + (1|species),
+  family = student(), 
+  data = elerate_all,
+  seed = 811)
+withr::with_seed(811, pp_check(elerate_all_tbayes, type = "dens_overlay")) # Some extreme values 
+
+loo(elerate_all_gbayes, elerate_all_tbayes) # It seems student t is better, we have to fix the priors to our expectations
+# I have also tried beta (using 32 as maximum possible change), but doesn't really fit (not good for a peak)
+
+elerate_all_tbayesp <- brm(
+  rate ~ 
+    period * specialization + (1 | summit) + (1 | species), 
+  family = student(), 
+  prior = c(
+    prior(normal(0, 0.5), class = "b"),
+    prior(normal(0, 0.5), class = "Intercept"),
+    prior(student_t(3, 0, 0.3), class = "sigma"),
+    prior(gamma(80, 1), class = "nu")
+  ),
+  control = list(adapt_delta = 0.999),
+  data = elerate_all,
+  seed = 811
+) # 65, 70, 75, 80, 85
+withr::with_seed(811, pp_check(elerate_all_tbayesp, type = "dens_overlay", size = 2))
+
+loo(elerate_all_tbayes, elerate_all_tbayesp) # The one without priors seems slightly better, but the posterior distribution doesn't match, we keep use priors
+
+
+## Diagnosis
+
+# Model convergence and sample quality
+elerate_all_tbayesp |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_all_tbayesp |> plot() # hairy caterpillars
+
+# Posterior predictive check
+withr::with_seed(811, pp_check(elerate_all_tbayesp, type = "dens_overlay"))
+
+# Residuals
+elerate_bayes_res <- tibble(
+  fitted = fitted(elerate_all_tbayesp)[, "Estimate"],
+  residuals = residuals(elerate_all_tbayesp)[, "Estimate"],
+  period = elerate_all$period,
+  specialization = elerate_all$specialization,
+  summit = elerate_all$summit,
+  species = elerate_all$species
+)
+ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = specialization)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+
+# It seems there might be some heteroskedasticity, with period 2 having greater variance
+pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
+pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "specialization") # Quite similar
+
+
+
+### Model 2
+
+elerate_all_bayesh <- brm(
+  bf(rate ~
+       period * specialization + (1|summit) + (1|species),
+     sigma ~period),
+  family = student(),
+  prior = c(
+    prior(normal(0, 0.5), class = "b"),
+    prior(normal(0, 0.5), class = "Intercept"),
+    prior(gamma(46, 1), class = "nu")
+  ),
+  data = elerate_all,
+  control = list(adapt_delta = 0.999),
+  seed = 811
+)
+# elerate_all_bayesh <- tar_read(elerate_all_bayes) # To double-check targets
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay", size = 1))
+loo(elerate_all_tbayesp, elerate_all_bayesh)
+
+## Diagnosis
+
+# Model convergence and sample quality
+elerate_all_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_all_bayesh |> plot() # hairy caterpillars
+
+# Posterior predictive check
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay")) # Quite good
+
+# Residuals
+elerate_all_bayesh_res <- tibble(
+  fitted = fitted(elerate_all_bayesh)[, "Estimate"],
+  residuals = residuals(elerate_all_bayesh)[, "Estimate"],
+  period = elerate_all$period,
+  specialization = elerate_all$specialization,
+  summit = elerate_all$summit,
+  species = elerate_all$species
+)
+ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+# Maybe more variance in period 2, but it looks quite good
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
+
+ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "specialization"))
+# Quite similar distributions, no need to adjust for it
+
+# Random effect structure
+elerate_all_bayesh |> ranef()
+elerate_all_bayesh |> VarCorr()
+elerate_all_bayesh |> bayes_R2()
+
+# Outliers
+elerate_all_bayesh |> loo() # No influential points
+
+# Summary
+elerate_all_bayesh |> summary()
+
+elerate_all_results <- elerate_all_bayesh |>
+  mod_summary()
+
+
+
+## Elevation change. Only species present all years----
+
+elerate_rem_bayesh <- brm(
+  bf(rate ~
+       period * specialization + (1|summit) + (1|species),
+     sigma ~period),
+  family = student(),
+  prior = c(
+    prior(normal(0, 0.5), class = "b"),
+    prior(normal(0, 0.5), class = "Intercept"),
+    prior(gamma(45, 1), class = "nu")
+  ),
+  data = elerate_remained,
+  control = list(adapt_delta = 0.999),
+  seed = 811
+)
+# elerate_rem_bayesh <- tar_read(elerate_rem_bayes) # To double check targets
+
+## Diagnosis
+
+# Model convergence and sample quality
+elerate_rem_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_rem_bayesh |> plot() # hairy caterpillars
+
+# Posterior predictive check
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay", size = 2)) # The range is slightly too wide. I continue, and see afterwards what to adjust
+
+# Residuals
+elerate_rem_bayesh_res <- tibble(
+  fitted = fitted(elerate_rem_bayesh)[, "Estimate"],
+  residuals = residuals(elerate_rem_bayesh)[, "Estimate"],
+  period = elerate_remained$period,
+  specialization = elerate_remained$specialization,
+  summit = elerate_remained$summit,
+  species = elerate_remained$species
+)
+ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+# Maybe more variance in period 2, but it looks quite good
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "period"))
+
+ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "specialization"))
+# Very similar distributions
+
+# Random effect structure
+elerate_rem_bayesh |> ranef()
+elerate_rem_bayesh |> VarCorr()
+elerate_rem_bayesh |> bayes_R2()
+
+# Outliers
+elerate_rem_bayesh |> loo() # No influential points
+
+# Summary
+elerate_rem_bayesh |> summary()
+
+elerate_rem_results <- elerate_rem_bayesh |> 
+  mod_summary()
+
+
+
+
+## Elevation change Including new species----
+
+elerate_new_bayesh <- brm(
+  bf(rate ~
+       period * specialization + (1|summit) + (1|species),
+     sigma ~period),
+  family = student(),
+  data = elerate_new,
+  control = list(adapt_delta = 0.999),
+  seed = 811
+)
+# elerate_new_bayesh <- tar_read(elerate_new_bayes) # To double-check targets
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) 
+
+
+## Diagnosis
+
+# Model convergence and sample quality
+elerate_new_bayesh |> summary()   # Rhat = 1, no divergent transitions, large ESS (effective sample size)
+elerate_new_bayesh |> plot() # hairy caterpillars
+
+# Posterior predictive check
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay")) # Correct range, but misses the slight bump on the positive side
+
+# Residuals
+elerate_new_bayesh_res <- tibble(
+  fitted = fitted(elerate_new_bayesh)[, "Estimate"],
+  residuals = residuals(elerate_new_bayesh)[, "Estimate"],
+  period = elerate_new$period,
+  specialization = elerate_new$specialization,
+  summit = elerate_new$summit,
+  species = elerate_new$species
+)
+ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = period)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "period")) # Some heteroskedasticity, but doesn't look that bad
+
+
+ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  ) +
+  theme_minimal()
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "specialization"))
+
+# Random effect structure
+elerate_new_bayesh |> ranef()
+elerate_new_bayesh |> VarCorr()
+elerate_new_bayesh |> bayes_R2()
+
+# Outliers
+elerate_new_bayesh |> loo() # No influential points
+
+# Summary
+elerate_new_bayesh |> summary()
+
+elerate_new_results <- elerate_new_bayesh |> 
+  mod_summary()
+
+
+
