@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "brms","broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "brms","tidybayes", "bayesplot", "broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "vegan", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -16,6 +16,11 @@ conflicts_prefer(
   dplyr::lag,
   brms::ar,
   brms::lognormal,
+  brms::dstudent_t,
+  brms::pstudent_t,
+  brms::qstudent_t,
+  brms::rstudent_t,
+  brms::rhat,
   stats::chisq.test,
   stats::fisher.test,
   flextable::border,
@@ -191,7 +196,7 @@ mod_summary <- function(mod) {
 }
 
 gg_results <- function(data) {
-  figure <- data |> 
+  data |> 
     mutate(Period = factor(Period, levels = c("period2", "period1")),
            Specialization = factor(Specialization, levels = c("generalist", "alpine"))) |>
     ggplot(aes(x = Estimate, y = Specialization, colour = Period)) +
@@ -211,7 +216,6 @@ gg_results <- function(data) {
           legend.box.margin = margin(l = -10),
           legend.title = element_text(margin = margin(b = 5, r = 40)),
           legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
-  return(figure)
 }
 
 mod_types <- function(mod) {
@@ -247,7 +251,7 @@ mod_types <- function(mod) {
   
   ## Emmeans
   reference <- ref_grid(mod,
-                        at = list(area = std_area))
+                        at = list(habitat_decare = std_area))
   emmeans <- reference |> 
     emmeans(~ main_type, type = "response")
   # Arrange as dataframe
