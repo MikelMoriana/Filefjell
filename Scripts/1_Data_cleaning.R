@@ -118,7 +118,10 @@ maintype_cover_tidy <- type_cover_tidy |>
 
 summit_data_tidy <- summit_data |> 
   clean_names() |> 
-  mutate(summit = str_replace_all(summit, " ", "_"))
+  mutate(summit = str_replace_all(summit, " ", "_")) |> 
+  rename(summit_hectare = area) |> 
+  mutate(summit_decare = 10 * summit_hectare) |> 
+  relocate(summit_decare, .after = summit_hectare)
 
 
 
@@ -266,14 +269,14 @@ type_species_clean <- type_species_tidy |>
             by = c("summit", "main_type")) |>
   relocate(percentage, .after = main_type) |>
   left_join(summit_data_tidy |>
-              select(summit, elevation, area) |>
+              select(summit, elevation, summit_decare) |>
               rename(elevation_correct = elevation),
             by = "summit") |>
   select(!elevation) |>
-  rename(elevation = elevation_correct, summit_area = area) |>
-  mutate(area = summit_area * percentage / 100) |>
-  relocate(c(elevation, summit_area), .after = summit) |>
-  relocate(area, .after = percentage) |>
+  rename(elevation = elevation_correct) |>
+  mutate(habitat_decare = summit_decare * percentage / 100) |>
+  relocate(c(elevation, summit_decare), .after = summit) |>
+  relocate(habitat_decare, .after = percentage) |>
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
   arrange(summit, year, species)
 
