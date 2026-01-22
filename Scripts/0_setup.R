@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "brms","tidybayes", "bayesplot", "broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "vegan", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "brms","tidybayes", "bayesplot", "performance", "broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "vegan", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -103,7 +103,7 @@ adj_label <- c(new = "<b>a)</b> New<br><span style='color:transparent'>b) </span
 
 colour_mapping <-  list(
   period = c("period1" = "#859395", "period2" = "#f58800"),
-  specialization = c("alpine" = "#859395", "generalist" = "#f58800")
+  specialisation = c("alpine" = "#859395", "generalist" = "#f58800")
 )
 
 
@@ -145,14 +145,14 @@ mod_summary <- function(mod) {
     hline(i = c(1, 3))
 
   ## Emmeans
-  emmeans <- emmeans(mod, ~ period * specialization)
+  emmeans <- emmeans(mod, ~ period * specialisation)
   # Arrange as dataframe
   emmeans_df <- emmeans %>%
     tidy(conf.int = TRUE) %>%
     mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
            p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
     relocate(std.error, .after = estimate) %>%
-    rename(Period = period, Specialization = specialization, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    rename(Period = period, specialisation = specialisation, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
   emmeans_ft <-  emmeans_df %>%
@@ -163,7 +163,7 @@ mod_summary <- function(mod) {
 
   ## Contrasts
   ref_grid <- emmeans |> summary()
-  contrast_numbers <- unique(ref_grid[c("period", "specialization")])
+  contrast_numbers <- unique(ref_grid[c("period", "specialisation")])
   # Perform contrast analysis with only the desired contrast
   contrast <- emmeans %>%
     contrast(method = contrast_matrix)
@@ -198,8 +198,8 @@ mod_summary <- function(mod) {
 gg_results <- function(data) {
   data |> 
     mutate(Period = factor(Period, levels = c("period2", "period1")),
-           Specialization = factor(Specialization, levels = c("generalist", "alpine"))) |>
-    ggplot(aes(x = Estimate, y = Specialization, colour = Period)) +
+           specialisation = factor(specialisation, levels = c("generalist", "alpine"))) |>
+    ggplot(aes(x = Estimate, y = specialisation, colour = Period)) +
     theme_minimal() +
     geom_vline(xintercept = 0, colour = "black") +
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
