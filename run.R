@@ -50,7 +50,7 @@ manual_positions <- tribble(
   "elevation_2008_2009_clean",      600,   -150,
   "elevation_2024_2025_clean",      600,      0,
   "elevation_data_clean",          1200,   -100,
-  "type_species_clean",            1000,    100,
+  "type_species_clean",            1050,    400,
   
   # Datasets for analyses
   "visit_years",                   1200,      0,
@@ -86,7 +86,8 @@ manual_positions <- tribble(
   "elerate_new_results",           2200,    250,
   
   #Results
-  "mod_summary",                   2600,      0
+  "mod_summary",                   2600,      0,
+  "mod_types",                     2600,    400,
 )
 
 nodes <- vis_data$x$nodes |> 
