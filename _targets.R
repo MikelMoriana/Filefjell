@@ -256,7 +256,7 @@ list(
       rbind(elevation_2024_2025_clean) |>
       left_join(filefjell_species, by = "species") |>
       mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
-      relocate(specialization, .before = species) |>
+      relocate(specialisation, .before = species) |>
       select(!new_name) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
       arrange(summit, year, species)
@@ -268,7 +268,7 @@ list(
                                  TRUE ~ species)) |>
       left_join(filefjell_species, by = "species") |>
       mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
-      relocate(specialization, .before = species) |>
+      relocate(specialisation, .before = species) |>
       select(!new_name) |>
       left_join(maintype_cover_tidy |>
                   select(summit, main_type, percentage),
@@ -343,8 +343,8 @@ list(
   tar_target(
     name = turnover_grouped,
     command = turnover_species |> 
-      summarise(.by = c("specialization", "development"), total = n() / 2) |>
-      arrange(development, specialization)
+      summarise(.by = c("specialisation", "development"), total = n() / 2) |>
+      arrange(development, specialisation)
   ),
   tar_target(
     name = observations,
@@ -355,20 +355,20 @@ list(
                               year == "distance2" ~ 2009,
                               year == "distance3" ~ 2024)) |> 
       filter(!is.na(distance)) |> 
-      summarise(.by = c(year, specialization), observations = n()) |> 
+      summarise(.by = c(year, specialisation), observations = n()) |> 
       arrange(year) |> 
       pivot_wider(names_from = year, values_from = observations) |> 
-      mutate(specialization = ifelse(specialization == "alpine", "Alpine", "Generalist")) |> 
+      mutate(specialisation = ifelse(specialisation == "alpine", "Alpine", "Generalist")) |> 
       rbind(c("extra", "extra1", "extra2", "extra3"), 
-            c("Specialization", "1972", "2009", "2024")) |> 
+            c("specialisation", "1972", "2009", "2024")) |> 
       row_to_names(row_number = 3, remove_rows_above = FALSE) |> 
-      mutate(extra = factor(extra, levels = c("Specialization", "Alpine", "Generalist"))) |> 
+      mutate(extra = factor(extra, levels = c("specialisation", "Alpine", "Generalist"))) |> 
       arrange(extra)
   ),
   tar_target(
     name = turnover_development,
     command = turnover_grouped |> 
-      pivot_wider(names_from = specialization, values_from = total) |> 
+      pivot_wider(names_from = specialisation, values_from = total) |> 
       mutate(status1 = case_when(development %in% c("Remained", "Disappeared2") ~ "Remained",
                                  development %in% c("Appeared1", "Forth_back") ~ "New",
                                  development %in% c("Disappeared1", "Back_forth") ~ "Lost",
@@ -408,7 +408,7 @@ list(
   tar_target(
     name = turnover_summit,
     command = turnover_species |>
-      summarise(.by = c(summit, period, specialization),
+      summarise(.by = c(summit, period, specialisation),
                 new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE),
                 nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE),
                 lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
@@ -417,7 +417,7 @@ list(
     name = turnew_mod,
     command = glmmTMB(
       new ~
-        period * specialization + (1 | summit),
+        period * specialisation + (1 | summit),
       family = gaussian,
       data = turnover_summit)
   ),
@@ -430,8 +430,8 @@ list(
     name = turlost_mod,
     command = glmmTMB(
       lost ~
-        period * specialization + (1 | summit),
-      dispformula = ~period*specialization,
+        period * specialisation + (1 | summit),
+      dispformula = ~period*specialisation,
       family = gaussian,
       data = turnover_summit)
   ),
@@ -444,13 +444,13 @@ list(
   tar_target(
     name = richness_rate,
     command = turnover_species |>
-      summarise(.by = c(summit, elevation, period, specialization), rate = sum(rate))
+      summarise(.by = c(summit, elevation, period, specialisation), rate = sum(rate))
   ),
   tar_target(
     name = richrate_mod,
     command = glmmTMB(
       rate ~
-        period * specialization + (1 | summit),
+        period * specialisation + (1 | summit),
       dispformula = ~period,
       family = gaussian,
       data = richness_rate)
@@ -481,10 +481,34 @@ list(
       mutate(rate = change / years)
   ),
   tar_target(
+    name = priors_t,
+    command = c(
+      prior(normal(0, 0.5), class = "Intercept"),
+      prior(normal(0, 0.5), class = "b"),
+      prior(exponential(3), class = "sd"),
+      prior(gamma(2, 0.4), class = "nu"),
+      prior(normal(-1.098612, 0.5), class = "Intercept", dpar = "sigma"), 
+      prior(normal(0, 0.3), class = "b", dpar = "sigma")
+    )
+  ),
+  tar_target(
+    name = elerate_all_bayest,
+    command = brm(
+      bf(rate ~ 
+           period * specialisation + (1|summit) + (1|species),
+         sigma ~ period),
+      family = student(),
+      prior = priors_t,
+      data = elerate_all,
+      chains = 4, iter = 4000, seed = 811,
+      control = list(adapt_delta = 0.95)
+    )
+  ),
+  tar_target(
     name = elerate_all_bayes,
     command = brm(
       bf(rate ~
-           period * specialization + (1|summit) + (1|species),
+           period * specialisation + (1|summit) + (1|species),
          sigma ~period),
       family = student(),
       prior = c(
@@ -519,7 +543,7 @@ list(
     name = elerate_rem_bayes,
     command = brm(
       bf(rate ~
-           period * specialization + (1|summit) + (1|species),
+           period * specialisation + (1|summit) + (1|species),
          sigma ~period),
       family = student(),
       prior = c(
@@ -554,7 +578,7 @@ list(
     name = elerate_new_bayes,
     command = brm(
       bf(rate ~
-           period * specialization + (1|summit) + (1|species),
+           period * specialisation + (1|summit) + (1|species),
          sigma ~period),
       family = student(),
       data = elerate_new,
