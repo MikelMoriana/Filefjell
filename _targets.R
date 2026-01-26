@@ -256,7 +256,7 @@ list(
       rbind(elevation_2024_2025_clean) |>
       left_join(filefjell_species, by = "species") |>
       mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
-      relocate(specialisation, .before = species) |>
+      relocate(c(specialisation, functional), .after = species) |>
       select(!new_name) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
       arrange(summit, year, species)
@@ -268,7 +268,7 @@ list(
                                  TRUE ~ species)) |>
       left_join(filefjell_species, by = "species") |>
       mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
-      relocate(specialisation, .before = species) |>
+      relocate(c(specialisation, fucntional), .after = species) |>
       select(!new_name) |>
       left_join(maintype_cover_tidy |>
                   select(summit, main_type, percentage),
