@@ -5,11 +5,11 @@ source("Scripts/0_setup.R")
 
 # Data----
 
-elevation_data_clean <- tar_read(elevation_data_clean) |> 
+altitude_data_clean <- tar_read(elevation_data_clean) |> 
   rename("functional" = "...3") |> 
   relocate(c(specialisation, functional), .after = species)
 
-summit_periods <- elevation_data_clean |>
+summit_periods <- altitude_data_clean |>
   select(year, summit) |>
   mutate(year = ifelse(year == 2025 & summit == "Storeknippa", 2024, year)) |> # For simplicity's sake, we assume the five species recorded in Storeknippa in 2025 were also there in 2024
   distinct() |> 
@@ -22,7 +22,7 @@ summit_periods <- elevation_data_clean |>
   select(summit, period1, period2) |> 
   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "time")
 
-simplified_data <- elevation_data_clean |> 
+simplified_data <- altitude_data_clean |> 
   select(!c(date:recorder, rareness)) |> 
   mutate(year = case_when(year == 1972 ~ "first",
                           year %in% c(2008, 2009) ~ "second",
@@ -245,7 +245,9 @@ turnover_area_grouped <- turnover_area |>
 # Considering only species for which we have data (present two sampling times in a row)
 
 elevation_test <- simplified_data |> 
-  pivot_wider(names_from = year, values_from = distance)
+  pivot_wider(names_from = year, values_from = distance) |> 
+  mutate(period1 = (second - first) * (-1),
+         period2 = (third - second) * (-1)) # Change the sign so that a positive value indicates upwards movement
   
 elerate_all <- elevation_wide |>
   mutate(change1 = distance1 - distance2, 
