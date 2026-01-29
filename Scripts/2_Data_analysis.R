@@ -5,94 +5,231 @@ source("Scripts/0_setup.R")
 
 # Data----
 
-elevation_data_clean <- tar_read(elevation_data_clean)
-visit_years <- elevation_data_clean |>
+elevation_data_clean <- tar_read(elevation_data_clean) |> 
+  rename("functional" = "...3") |> 
+  relocate(c(specialisation, functional), .after = species)
+
+summit_periods <- elevation_data_clean |>
   select(year, summit) |>
-  distinct() |>
+  mutate(year = ifelse(year == 2025 & summit == "Storeknippa", 2024, year)) |> # For simplicity's sake, we assume the five species recorded in Storeknippa in 2025 were also there in 2024
+  distinct() |> 
   pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
-  mutate(first = 1972,
+  mutate(first = y1972,
          second = coalesce(y2008, y2009),
          third = coalesce(y2024, y2025)) |>
-  select(summit, first, second, third)
-
-elevation_wide <- elevation_data_clean |>
-  select(!c(date:recorder, rareness)) |>
-  pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |>
-  left_join(visit_years, by = "summit") |>
-  mutate(third = ifelse(!is.na(y2025), 2025, third),
-         distance1 = y1972,
-         distance2 = coalesce(y2008, y2009),
-         distance3 = coalesce(y2024, y2025)) |>
-  select(!c(y1972, y2008, y2009, y2024, y2025)) |>
   mutate(period1 = second - first,
-         period2 = third - second)
+         period2 = third - second) |> 
+  select(summit, period1, period2) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "time")
 
-
-## Turnover----
-
-turnover_species <- elevation_wide |>
-  select(!first:third) |>
-  mutate(presence1 = ifelse(is.na(distance1), 0, 1),
-         presence2 = ifelse(is.na(distance2), 0, 1),
-         presence3 = ifelse(is.na(distance3), 0, 1),
-         turnover1 = presence2 - presence1,
-         turnover2 = presence3 - presence2,
-         development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
-                                 turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
-                                 turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
-                                 turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
-                                 turnover1 == 0 & turnover2 == 0 ~ "Remained",
-                                 turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
-                                 turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
-                                 turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
-                                 turnover1 == -1 & turnover2 == -1 ~ "Error")) |>
-  select(!distance1:distance3) |> 
-  relocate(development, .after = species) |>
-  mutate(rate1 = turnover1 / period1,
-         rate2 = turnover2 / period2) |>
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  mutate(rate = ifelse(period == "period1", rate1, rate2)) |>
-  relocate(period:rate, .after = development) |>
-  mutate(period = as.factor(period))
-
-turnover_grouped <- turnover_species |> 
-  summarise(.by = c("specialization", "development"), total = n() / 2) |> # Divide by two since for each species we have two rows, one per period
-  arrange(development, specialization)
-
-turnover_bydevelopment <- turnover_species |> 
-  summarise(.by = c("development"), total = n() / 2) # Divide by two since for each species we have two rows, one per period
-
-
-# By summit
-
-turnover_summit <- turnover_species |> 
-  summarise(.by = c(summit, period, specialization), 
-            new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-            nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-            lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
-
-turnover_summit_tourist <- turnover_species |> 
-  filter(development %in% c("Forth_back", "Back_forth")) |> 
-  summarise(.by = c(summit, period), 
-            new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-            nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-            lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
-
-turnover_summit_nontourist <- turnover_species |> 
-  filter(!(development %in% c("Forth_back", "Back_forth"))) |> 
-  summarise(.by = c(summit, period), 
-            new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-            nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-            lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+simplified_data <- elevation_data_clean |> 
+  select(!c(date:recorder, rareness)) |> 
+  mutate(year = case_when(year == 1972 ~ "first",
+                          year %in% c(2008, 2009) ~ "second",
+                          year %in% c(2024, 2025) ~ "third"))
 
 
 ## Richness----
 
-richness_rate <- turnover_species |>
-  summarise(.by = c(summit, elevation, period, specialization), rate = sum(rate))
+richness <- simplified_data |> 
+  summarise(.by = c(year, summit, specialisation), richness = n())
+
+richness_rate <- richness |> 
+  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |> 
+  mutate(period1 = second - first,
+         period2 = third - second) |> 
+  select(!c(first:third)) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = change / time)
 
 
-# New species by area
+# Only top 10 metres
+
+richness10 <- simplified_data |> 
+  filter(distance <= 10) |> 
+  summarise(.by = c(year, summit, specialisation), richness = n())
+
+richness10_rate <- richness10 |> 
+  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |> 
+  mutate(period1 = second - first,
+         period2 = third - second) |> 
+  select(!c(first:third)) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = change / time)
+
+
+# richness <- elevation_wide |> 
+#   pivot_longer(cols = first:third, names_to = "survey", values_to = "year") |> 
+#   mutate(presence = case_when(survey == "first" & !is.na(distance1) ~ 1,
+#                               survey == "first" & is.na(distance1) ~ 0,
+#                               survey == "second" & !is.na(distance2) ~ 1,
+#                               survey == "second" & is.na(distance2) ~ 0,
+#                               survey == "third" & !is.na(distance3) ~ 1,
+#                               survey == "third" & is.na(distance3) ~ 0)) |> 
+#   summarise(.by = c(summit, survey, year, specialisation, functional), richness = sum(presence))
+# 
+# richness_rate <- richness |> 
+#   summarise(.by = c(summit, year, specialisation), richness = sum(richness)) |> 
+#   pivot_wider(names_from = year, values_from = richness, names_prefix = "y") |> 
+#   mutate(change1 = ifelse(!is.na(y2008), y2008 - y1972, y2009 - y1972),
+#          period1 = ifelse(!is.na(y2008), 2008 - 1972, 2009 - 1972),
+#          change2 = case_when(!is.na(y2024) & !is.na(y2008) ~ y2024 - y2008,
+#                              !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009,
+#                              !is.na(y2025) & !is.na(y2008) ~ y2025 - y2008,
+#                              !is.na(y2025) & !is.na(y2009) ~ y2025 - y2009),
+#          period2 = case_when(!is.na(y2024) & !is.na(y2008) ~ 2024 - 2008,
+#                              !is.na(y2024) & !is.na(y2009) ~ 2024 - 2009,
+#                              !is.na(y2025) & !is.na(y2008) ~ 2025 - 2008,
+#                              !is.na(y2025) & !is.na(y2009) ~ 2025 - 2009)) |> 
+#   select(!c(y1972:y2025)) |> 
+#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
+#   mutate(period = as.factor(period),
+#          change = case_when(period == "period1" ~ change1,
+#                             period == "period2" ~ change2),
+#          rate = change / years) |> 
+#   select(!c(change1, change2))
+# 
+# richfun_rate <- richness |> 
+#   summarise(.by = c(summit, year, functional), richness = sum(richness)) |> 
+#   pivot_wider(names_from = year, values_from = richness, names_prefix = "y") |> 
+#   mutate(change1 = ifelse(!is.na(y2008), y2008 - y1972, y2009 - y1972),
+#          period1 = ifelse(!is.na(y2008), 2008 - 1972, 2009 - 1972),
+#          change2 = case_when(!is.na(y2024) & !is.na(y2008) ~ y2024 - y2008,
+#                              !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009,
+#                              !is.na(y2025) & !is.na(y2008) ~ y2025 - y2008,
+#                              !is.na(y2025) & !is.na(y2009) ~ y2025 - y2009),
+#          period2 = case_when(!is.na(y2024) & !is.na(y2008) ~ 2024 - 2008,
+#                              !is.na(y2024) & !is.na(y2009) ~ 2024 - 2009,
+#                              !is.na(y2025) & !is.na(y2008) ~ 2025 - 2008,
+#                              !is.na(y2025) & !is.na(y2009) ~ 2025 - 2009)) |> 
+#   select(!c(y1972:y2025)) |> 
+#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
+#   mutate(period = as.factor(period),
+#          change = case_when(period == "period1" ~ change1,
+#                             period == "period2" ~ change2),
+#          rate = change / years) |> 
+#   select(!c(change1, change2))
+
+
+## Turnover----
+
+turnover <- simplified_data |> 
+  pivot_wider(names_from = year, values_from = distance) |> 
+  mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
+         new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
+         lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
+         lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |> 
+  select(!c(first:third)) |> 
+  summarise(.by = c(summit, specialisation), 
+            newperiod1 = sum(new1), 
+            newperiod2 = sum(new2),
+            lostperiod1 = sum(lost1),
+            lostperiod2 = sum(lost2)) |> 
+  pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2), 
+               names_to = c("type", "period"), 
+               names_pattern = "^(new|lost)(period\\d+)$",
+               values_to = "value")
+
+new_rate <- turnover |> 
+  filter(type == "new") |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = value / time)
+
+lost_rate <- turnover |> 
+  filter(type == "lost") |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = value / time)
+
+# turnover_species <- elevation_wide |>
+#   select(!first:third) |>
+#   mutate(presence1 = ifelse(is.na(distance1), 0, 1),
+#          presence2 = ifelse(is.na(distance2), 0, 1),
+#          presence3 = ifelse(is.na(distance3), 0, 1),
+#          turnover1 = presence2 - presence1,
+#          turnover2 = presence3 - presence2,
+#          development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
+#                                  turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
+#                                  turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
+#                                  turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
+#                                  turnover1 == 0 & turnover2 == 0 ~ "Remained",
+#                                  turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
+#                                  turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
+#                                  turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
+#                                  turnover1 == -1 & turnover2 == -1 ~ "Error")) |>
+#   select(!distance1:distance3) |> 
+#   relocate(development, .after = species) |>
+#   mutate(rate1 = turnover1 / period1,
+#          rate2 = turnover2 / period2) |>
+#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+#   mutate(rate = ifelse(period == "period1", rate1, rate2)) |>
+#   relocate(period:rate, .after = development) |>
+#   mutate(period = as.factor(period))
+# 
+# turnover_grouped <- turnover_species |> 
+#   summarise(.by = c("specialisation", "development"), total = n() / 2) |> # Divide by two since for each species we have two rows, one per period
+#   arrange(development, specialisation)
+# 
+# turnover_bydevelopment <- turnover_species |> 
+#   summarise(.by = c("development"), total = n() / 2) # Divide by two since for each species we have two rows, one per period
+# 
+# 
+# # By summit
+# 
+# turnover_summit <- turnover_species |> 
+#   summarise(.by = c(summit, period, specialisation), 
+#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
+#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
+#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+# 
+# turnover_summit_tourist <- turnover_species |> 
+#   filter(development %in% c("Forth_back", "Back_forth")) |> 
+#   summarise(.by = c(summit, period), 
+#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
+#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
+#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+# 
+# turnover_summit_nontourist <- turnover_species |> 
+#   filter(!(development %in% c("Forth_back", "Back_forth"))) |> 
+#   summarise(.by = c(summit, period), 
+#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
+#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
+#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+
+
+## 10 metres
+
+turnover10 <- simplified_data |> 
+  filter(distance <= 10) |> 
+  pivot_wider(names_from = year, values_from = distance) |> 
+  mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
+         new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
+         lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
+         lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |> 
+  select(!c(first:third)) |> 
+  summarise(.by = c(summit, specialisation), 
+            newperiod1 = sum(new1), 
+            newperiod2 = sum(new2),
+            lostperiod1 = sum(lost1),
+            lostperiod2 = sum(lost2)) |> 
+  pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2), 
+               names_to = c("type", "period"), 
+               names_pattern = "^(new|lost)(period\\d+)$",
+               values_to = "value")
+
+new10_rate <- turnover10 |> 
+  filter(type == "new") |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = value / time)
+
+lost10_rate <- turnover10 |> 
+  filter(type == "lost") |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = value / time)
+
+
+## New species by area----
 
 summit_data <- tar_read(summit_data_tidy)
 
@@ -105,15 +242,11 @@ turnover_area_grouped <- turnover_area |>
 
 ## Distance----
 
-elevation_wide_new <- elevation_wide |> 
-  mutate(adj_dist1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
-         adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2),
-         adj_dist3 = ifelse(is.na(distance3) & is.na(distance1) & !is.na(distance2), 33, distance3))
-# If a species appeared we assume it was right below the limit the previous survey. If a species disappeared, and it was new the previous survey, we assume it has gone back to right below the limit
-
-# We have distance to the top as variable, which lets us compare mountains of different elevations. But since we are using change, we decide to use change in altitude instead of change in distance, since it is more intuitive: a positive value means the species grows higher up the summit (we subtract the value the first year from the value the second year)
-
 # Considering only species for which we have data (present two sampling times in a row)
+
+elevation_test <- simplified_data |> 
+  pivot_wider(names_from = year, values_from = distance)
+  
 elerate_all <- elevation_wide |>
   mutate(change1 = distance1 - distance2, 
          change2 = distance2 - distance3) |> 
@@ -154,14 +287,22 @@ elerate_new <- elevation_wide_new |>
 
 type_species <- tar_read(type_species_clean)
 
+all_species_types <- type_species |> 
+  mutate(habitat_decare = ifelse(is.na(habitat_decare), 0.25, habitat_decare)) |> 
+  mutate(main_type = ifelse(grepl("V", main_type), "V", main_type)) |> 
+  summarise(.by = c(summit, main_type, specialisation, habitat_decare), total = n()) |> 
+  pivot_wider(names_from = specialisation, values_from = total, values_fill = 0) |> 
+  pivot_longer(cols = c("alpine", "generalist"), names_to = "specialisation", values_to = "total") |> 
+  mutate(specialisation = as.factor(specialisation))
+
 new_species_2024_2025 <- turnover_species |> 
   filter(period == "period2", turnover2 == 1) |> 
   select(summit:species)
 
 new_species_types <- type_species |> 
-  right_join(new_species_2024_2025, by = c("summit", "elevation", "specialization", "species")) |> 
+  right_join(new_species_2024_2025, by = c("summit", "elevation", "specialisation", "species")) |> 
   mutate(habitat_decare = ifelse(is.na(habitat_decare), 0.25, habitat_decare)) |> 
-  summarise(.by = c(summit, elevation, summit_decare, specialization, main_type, habitat_decare), total = n()) |> 
+  summarise(.by = c(summit, elevation, summit_decare, specialisation, main_type, habitat_decare), total = n()) |> 
   mutate(main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7")))
 
 
@@ -184,7 +325,8 @@ new_species_types <- type_species |>
 
 
 
-# Turnover overview----
+# Rate Analyses----
+## Turnover overview----
 
 ### Overview tables
 
@@ -192,7 +334,7 @@ new_species_types <- type_species |>
 
 status_year <- turnover_species |> 
   filter(period == "period1") |> 
-  select(!c(elevation, specialization, development:rate, turnover1:rate2)) |> 
+  select(!c(elevation, specialisation, development:rate, turnover1:rate2)) |> 
   mutate(first = case_when(presence1 == 1 ~ "1972Present",
                            presence1 == 0 ~ "1972Absent")) |> 
   mutate(second = case_when(presence1 == 1 & presence2 == 1 ~ "2009Remained",
@@ -223,12 +365,12 @@ status_year_ft <- tibble(
   "1972total" = c(status_year |> filter(status == "1972Present") |> pull(total),
                 rep("", 6),
                 status_year |> filter(status == "1972Present") |> pull(total)),
-  "2008/09status" = c("Remained", "", "Disappeared", "", "Appeared", "", "", "Total present"),
+  "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present"),
   "2008/09total" = c(status_year |> filter(status == "2009Remained") |> pull(total), "",
                 status_year |> filter(status == "2009Lost") |> pull(total), "",
                 status_year |> filter(status == "2009New") |> pull(total), "", "",
                 (status_year |> filter(status == "2009Remained") |> pull(total)) + (status_year |> filter(status == "2009New") |> pull(total))),
-  "2024/25status" = c("Remained", "Disappeared", "Reappeared", "Did not reappear", "Remained", "Disappeared", "Appeared", "Total present"),
+  "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
   "2024/25total" = c(status_year |> filter(status == "2024Remained") |> pull(total),
                 status_year |> filter(status == "2024Lost") |> pull(total),
                 status_year |> filter(status == "2024Reappeared") |> pull(total),
@@ -248,7 +390,6 @@ status_year_ft <- tibble(
   bg(part = "body", bg = "white") |> 
   color(part = "body", color = "black") |> 
   bg(part = "body", i = 8, bg = "grey") |> 
-  # color(part = "body", color = "black") |> 
   hline(i = 4) |>
   hline(i = 2, j = 3:6) |> 
   hline(i = 6, j = 3:6) |> 
@@ -267,10 +408,10 @@ status_year_ft
 status_year_ft |> save_as_image(path = "Results/Status_year.png")
 
 
-# By specialization
+# By specialisation
 
 turnover_grouped |> 
-  pivot_wider(names_from = specialization, values_from = total)
+  pivot_wider(names_from = specialisation, values_from = total)
 # development   alpine  generalist
 # Remained         220         121
 # Appeared1        114         111
@@ -287,18 +428,18 @@ observations <- elevation_wide |>
                           year == "distance2" ~ 2009,
                           year == "distance3" ~ 2024)) |> 
   filter(!is.na(distance)) |> 
-  summarise(.by = c(year, specialization), observations = n()) |> 
+  summarise(.by = c(year, specialisation), observations = n()) |> 
   arrange(year) |> 
   pivot_wider(names_from = year, values_from = observations) |> 
-  mutate(specialization = ifelse(specialization == "alpine", "Alpine", "Generalist")) |> 
+  mutate(specialisation = ifelse(specialisation == "alpine", "Alpine", "Generalist")) |> 
   rbind(c("extra", "extra1", "extra2", "extra3"), 
-        c("Specialization", "1972", "2009", "2024")) |> 
+        c("specialisation", "1972", "2009", "2024")) |> 
   row_to_names(row_number = 3, remove_rows_above = FALSE) |> 
-  mutate(extra = factor(extra, levels = c("Specialization", "Alpine", "Generalist"))) |> 
+  mutate(extra = factor(extra, levels = c("specialisation", "Alpine", "Generalist"))) |> 
   arrange(extra)
 
 turnover_development <- turnover_grouped |> 
-  pivot_wider(names_from = specialization, values_from = total) |> 
+  pivot_wider(names_from = specialisation, values_from = total) |> 
   mutate(status1 = case_when(development %in% c("Remained", "Disappeared2") ~ "Remained",
                              development %in% c("Appeared1", "Forth_back") ~ "New",
                              development %in% c("Disappeared1", "Back_forth") ~ "Lost",
@@ -386,104 +527,18 @@ turnover_status |>
 
 
 
-# Turnover----
+## Richness----
 
-turnover_summit |>
-  summarise(.by = c(period, specialization),
-            new_mean = mean(new),
-            nochange_mean = mean(nochange),
-            lost_mean = mean(lost))
-
-
-# New species
-
-turnover_summit |>
-  ggplot(aes(x = period, y = new)) +
-  geom_violin()
-
-turnover_summit |> 
-  ggplot() +
-  geom_histogram(aes(x = new))
-
-turnew_mod <- glmmTMB(
-  new ~
-    period * specialization + (1 | summit),
-  family = gaussian,
-  data = turnover_summit)
-# turnew_mod <- tar_read(turnew_mod) # To double-check targets
-
-turnew_mod |> model_diagnosis() # No problems
-turnew_mod |> model_homoscedasticity() # No problems
-turnew_mod |> summary()
-# Slightly greater rate in the second period, but not by much. No difference between specialization levels
-
-turnew_results <- turnew_mod |>
-  mod_summary()
-
-
-# Lost species
-
-turnover_summit |>
-  ggplot(aes(x = period, y = lost)) +
-  geom_violin()
-
-turnover_summit |>
-  ggplot() +
-  geom_histogram(aes(x = lost))
-
-turlost_mod <- glmmTMB(
-  lost ~
-    period * specialization + (1 | summit),
-  family = gaussian,
-  data = turnover_summit)
-
-turlost_mod |> model_diagnosis()
-turlost_mod |> model_homoscedasticity()
-turlost_mod |> summary()
-
-turlost_modh <- glmmTMB(
-  lost ~
-    period * specialization + (1 | summit),
-  dispformula = ~period*specialization, # complex, but helps with uniformity and both heteroskedasticities
-  family = gaussian,
-  data = turnover_summit)
-# turlost_modh <- tar_read(turlost_mod) # To double-check targets
-
-turlost_modh |> model_diagnosis() # no problems
-turlost_modh |> model_homoscedasticity() # No problems
-turlost_modh |> summary()
-# Greater species loss in the second period
-
-turlost_results <- turlost_modh |>
-  mod_summary()
-
-
-
-
-# Richness----
-
-## Exploratory graphs
+## Whole top
 
 richness_rate |>
-  ggplot(aes(x = period, y = rate)) +
+  mutate(per_spe = paste0(period, specialisation)) |> 
+  ggplot(aes(x = per_spe, y = rate)) +
   geom_violin() +
   labs(title = " elevations by Year",
        x = "Year",
        y = "Vertical elevation to Top (meters)") +
   theme_minimal()
-
-richness_rate |>
-  ggplot(aes(x = summit:period, y = rate, color = summit)) +
-  geom_point() +
-  labs(title = "Plot of richness change per year",
-       x = "Year",
-       y = "Richness change (species/year)") +
-  theme_minimal() +
-  theme(legend.position = "none")
-# Some summits gained species at a faster rate, some at a slower, and some lost species in the second period
-
-
-## Modelling
 
 richness_rate |> 
   ggplot() +
@@ -491,7 +546,7 @@ richness_rate |>
 
 richrate_mod <- glmmTMB(
   rate ~
-    period * specialization + (1 | summit),
+    period * specialisation + (1 | summit),
   family = gaussian,
   data = richness_rate)
 
@@ -501,11 +556,10 @@ richrate_mod |> summary()
 
 richrate_modh <- glmmTMB(
   rate ~
-    period * specialization + (1 | summit),
+    period * specialisation + (1 | summit),
   dispformula = ~period,
   family = gaussian,
   data = richness_rate)
-# richrate_modh <- tar_read(richrate_mod) # To double-check targets
 
 richrate_modh |> model_diagnosis() # No problems
 richrate_modh |> model_homoscedasticity() # No problems
@@ -513,11 +567,149 @@ richrate_modh |> summary()
 
 richrate_results <- richrate_modh |> 
   mod_summary()
+richrate_results
+
+
+## 10 metres
+
+richrate10_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = richness10_rate)
+
+richrate10_mod |> model_diagnosis() # No problems
+richrate10_mod |> model_homoscedasticity() # period
+richrate10_mod |> summary()
+
+richrate10_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = richness10_rate)
+
+richrate10_modh |> model_diagnosis() # No problems
+richrate10_modh |> model_homoscedasticity() # No problems
+richrate10_modh |> summary()
+
+richrate10_results <- richrate10_mod |> 
+  mod_summary()
+richrate10_results
+
+
+# ## Functional
+# 
+# richfun_rate |>
+#   mutate(per_spe = paste0(period, functional)) |> 
+#   ggplot(aes(x = per_spe, y = rate)) +
+#   geom_violin() +
+#   labs(title = " elevations by Year",
+#        x = "Year",
+#        y = "Vertical elevation to Top (meters)") +
+#   theme_minimal()
+# 
+# richfun_rate |> 
+#   ggplot() +
+#   geom_histogram(aes(x = rate))
+# 
+# richfun_rate_mod <- glmmTMB(
+#   rate ~
+#     period * functional + (1 | summit),
+#   family = gaussian,
+#   data = richfun_rate)
+# 
+# richfun_rate_mod |> model_diagnosis() # Uniformity, outliers and quantiles
+# richfun_rate_mod |> model_homoscedasticity() # period and functional
+# richfun_rate_mod |> summary()
+# 
+# richfun_rate_modh <- glmmTMB(
+#   rate ~
+#     period * functional + (1 | summit),
+#   dispformula = ~period+functional,
+#   family = gaussian,
+#   data = richfun_rate)
+# 
+# richfun_rate_modh |> model_diagnosis() # No problems
+# richfun_rate_modh |> model_homoscedasticity() # No problems
+# richfun_rate_modh |> summary()
+# 
+# richfun_rate_results <- richfun_rate_modh |> 
+#   modfun_summary()
+# richfun_rate_results
+
+
+
+## New species----
+
+new_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin()
+
+new_rate |> 
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+new_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = new_rate)
+# turnew_mod <- tar_read(turnew_mod) # To double-check targets
+
+new_mod |> model_diagnosis() # No problems
+new_mod |> model_homoscedasticity() # No problems
+new_mod |> summary()
+# Slightly greater rate in the second period, but not by much. No difference between specialisation levels
+
+new_results <- new_mod |>
+  mod_summary()
+new_results
 
 
 
 
-# Elevation change - Only species we have data for----
+## Lost species----
+
+lost_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin()
+
+lost_rate |>
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+lost_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = lost_rate)
+
+lost_mod |> model_diagnosis() # Uniformity and quantiles
+lost_mod |> model_homoscedasticity() # period
+lost_mod |> summary()
+
+lost_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = lost_rate)
+# turlost_modh <- tar_read(turlost_mod) # To double-check targets
+
+lost_modh |> model_diagnosis() # no problems
+lost_modh |> model_homoscedasticity() # No problems
+lost_modh |> summary()
+# Greater species loss in the second period
+
+lost_results <- lost_modh |>
+  mod_summary()
+lost_results
+
+
+
+
+## Elevation change - Only species we have data for----
 
 #### Frequentist analysis
 
@@ -527,7 +719,7 @@ elerate_all |>
 
 elerate_all_mod <- glmmTMB(
   rate ~ 
-    period * specialization + (1 | summit) + (1 | species), 
+    period * specialisation + (1 | summit) + (1 | species), 
   family = gaussian, 
   data = elerate_all)
 
@@ -554,7 +746,7 @@ priors_g1 <- c(
 
 elerate_all_gmod1 <- brm(
   bf(rate ~
-       period * specialization + (1|summit) + (1|species)),
+       period * specialisation + (1|summit) + (1|species)),
   family = gaussian(),
   prior = priors_g1,
   sample_prior = "only",
@@ -564,7 +756,7 @@ elerate_all_gmod1 <- brm(
 
 elerate_all_expla1 <- crossing(
   period = unique(elerate_all$period),
-  specialization = unique(elerate_all$specialization),
+  specialisation = unique(elerate_all$specialisation),
   summit = NA,
   species = NA
 )
@@ -574,7 +766,7 @@ elerate_all_gpred1 <- elerate_all_gmod1 %>%
   mutate(in_range = between(.prediction, -2, 2))
 
 elerate_all_gsumm1 <- elerate_all_gpred1 %>%
-  group_by(period, specialization) %>%
+  group_by(period, specialisation) %>%
   summarise(
     p_in_range = mean(in_range),
     q05 = quantile(.prediction, 0.05),
@@ -596,7 +788,7 @@ priors_t1 <- c(
 
 elerate_all_tmod1 <- brm(
   bf(rate ~
-       period * specialization + (1|summit) + (1|species)),
+       period * specialisation + (1|summit) + (1|species)),
   family = student(),
   prior = priors_t1,
   sample_prior = "only",
@@ -609,7 +801,7 @@ elerate_all_tpred1 <- elerate_all_tmod1 %>%
   mutate(in_range = between(.prediction, -2, 2))
 
 elerate_all_tsumm1 <- elerate_all_tpred1 %>%
-  group_by(period, specialization) %>%
+  group_by(period, specialisation) %>%
   summarise(
     p_in_range = mean(in_range),
     q05 = quantile(.prediction, 0.05),
@@ -625,7 +817,7 @@ elerate_all_tsumm1
 
 elerate_all_gmod2 <- brm(
   bf(rate ~ 
-       period * specialization + (1|summit) + (1|species)),
+       period * specialisation + (1|summit) + (1|species)),
   family = gaussian(),
   prior = priors_g1,
   data = elerate_all,
@@ -636,7 +828,7 @@ elerate_all_gmod2 <- brm(
 # Student-t, sigma constant
 elerate_all_tmod2 <- brm(
   bf(rate ~ 
-       period * specialization + (1|summit) + (1|species)),
+       period * specialisation + (1|summit) + (1|species)),
   family = student(),
   prior = priors_t1,
   data = elerate_all,
@@ -698,7 +890,7 @@ priors_t3 <- c(
 
 elerate_all_tmod3per <- brm(
   bf(rate ~ 
-       period * specialization + (1|summit) + (1|species),
+       period * specialisation + (1|summit) + (1|species),
      sigma ~ period),
   family = student(),
   prior = priors_t3,
@@ -709,8 +901,8 @@ elerate_all_tmod3per <- brm(
 
 elerate_all_tmod3spe <- brm(
   bf(rate ~ 
-       period * specialization + (1|summit) + (1|species),
-     sigma ~ specialization),
+       period * specialisation + (1|summit) + (1|species),
+     sigma ~ specialisation),
   family = student(),
   prior = priors_t3,
   data = elerate_all,
@@ -720,8 +912,8 @@ elerate_all_tmod3spe <- brm(
 
 elerate_all_tmod3perspe <- brm(
   bf(rate ~ 
-       period * specialization + (1|summit) + (1|species),
-     sigma ~ period + specialization),
+       period * specialisation + (1|summit) + (1|species),
+     sigma ~ period + specialisation),
   family = student(),
   prior = priors_t3,
   data = elerate_all,
@@ -731,8 +923,8 @@ elerate_all_tmod3perspe <- brm(
 
 elerate_all_tmod3perspeplus <- brm(
   bf(rate ~ 
-       period * specialization + (1|summit) + (1|species),
-     sigma ~ period * specialization),
+       period * specialisation + (1|summit) + (1|species),
+     sigma ~ period * specialisation),
   family = student(),
   prior = priors_t3,
   data = elerate_all,
@@ -750,7 +942,7 @@ posterior_summary(elerate_all_tmod3per, variable = "nu")
 posterior_summary(elerate_all_tmod3spe, variable = "nu")
 posterior_summary(elerate_all_tmod3perspe, variable = "nu")
 posterior_summary(elerate_all_tmod3perspeplus, variable = "nu")
-# We keep the per model. period improves drastically the fit, and increases nu. Specialization does not do it. The additive and interactive models are slightly better, but the improvement is within 1 SD. So they add complexity without improving the results notably
+# We keep the per model. period improves drastically the fit, and increases nu. specialisation does not do it. The additive and interactive models are slightly better, but the improvement is within 1 SD. So they add complexity without improving the results notably
 
 
 
@@ -786,79 +978,60 @@ ppc_loo_pit_qq(elerate_all_t3per_rates,
 
 # Most species show modest movement, but a few exhibit surprisingly large shifts
 
+elerate_all_t3per_r2 <- r2_bayes(elerate_all_tmod3per)
+elerate_all_t3per_r2 # Neither the fixed effects or the random effects explain much
+
 
 ### 6. Post hoc
 
-elerate_all_tmod3per |> mod_summary()
+elerate_all_results <- elerate_all_tmod3per |> 
+  mod_summary()
+elerate_all_results
 # Post-hoc analyses of mean elevational change
-
-elerate_all_t3per_sigma <- elerate_all_tmod3per |> 
-  spread_draws(b_sigma_Intercept, b_sigma_periodperiod2) |> 
-  mutate(
-    sigma_period1 = exp(b_sigma_Intercept),
-    sigma_period2 = exp(b_sigma_Intercept + b_sigma_periodperiod2),
-    diff = sigma_period2 - sigma_period1,
-    ratio = sigma_period2 / sigma_period1
-    )
-
-elerate_all_t3per_sigma_summary <- elerate_all_t3per_sigma %>%
-  summarise(
-    mean_sigma1 = mean(sigma_period1),
-    mean_sigma2 = mean(sigma_period2),
-    mean_diff   = mean(diff),
-    mean_ratio  = mean(ratio),
-    pr_sigma2_gt_sigma1 = mean(sigma_period2 > sigma_period1),
-    ci_sigma1_low  = quantile(sigma_period1, 0.025),
-    ci_sigma1_high = quantile(sigma_period1, 0.975),
-    ci_sigma2_low  = quantile(sigma_period2, 0.025),
-    ci_sigma2_high = quantile(sigma_period2, 0.975),
-    ci_ratio_low   = quantile(ratio, 0.025),
-    ci_ratio_high  = quantile(ratio, 0.975)
-  )
-
-# Residual variation in elevational movement increased more than threefold between sampling periods (posterior mean ratio σ₂/σ₁ = 3.25, 95% HPD: 2.68–3.94), with posterior probability P(σ₂ > σ₁) ≈ 1. This indicates a substantial rise in the heterogeneity of species’ responses to recent climatic conditions, despite no strong change in average elevational movement.
 
 
 
 
 # Results----
 
-emmeans_overview <- turnew_results$emmeans_df |> 
-  mutate(Model = "new") |>
-  rbind(turlost_results$emmeans_df |> 
-          mutate(Model = "lost")) |> 
-  rbind(richrate_results$emmeans_df |>
-          mutate(Model = "richness")) |> 
-  rbind(elerate_all_results$emmeans_df |> 
+emmeans_overview <- richrate_results$emmeans_df |>
+  mutate(Model = "richness") |>
+  rbind(turnew_results$emmeans_df |>
+          mutate(Model = "new")) |>
+  rbind(turlost_results$emmeans_df |>
+          mutate(Model = "lost")) |>
+  rbind(elerate_all_results$emmeans_df |>
           mutate(df = NA_real_,
                  statistic = NA_real_,
-                 Model = "elevation") |> 
-          relocate(df, .after = Estimate) |> 
-          relocate(statistic, .after = CI_upper)) |> 
-  relocate(Model) |> 
-  mutate(Model = factor(Model, levels = c("new", "lost", "richness", "elevation")))
+                 Model = "elevation") |>
+          relocate(df, .after = Estimate) |>
+          relocate(statistic, .after = CI_upper)) |>
+  relocate(Model) |>
+  mutate(Model = factor(Model, levels = c("richness", "new", "lost", "elevation")))
 
-contrasts_overview <- turnew_results$contrast_df |> 
-  mutate(Model = "New species") |>
-  rbind(turlost_results$contrast_df |> 
-          mutate(Model = "Lost species")) |> 
-  rbind(richrate_results$contrast_df |>
-          mutate(Model = "Richness")) |> 
-  rbind(elerate_all_results$contrast_df |> 
+
+contrasts_overview <- richrate_results$contrast_df |>
+  mutate(Model = "Species richness") |>
+  rbind(turnew_results$contrast_df |>
+          mutate(Model = "New species")) |>
+  rbind(turlost_results$contrast_df |>
+          mutate(Model = "Lost species")) |>
+  rbind(elerate_all_results$contrast_df |>
           mutate(df = NA_real_,
                  statistic = NA_real_,
-                 Model = "Elevation") |> 
-          relocate(df, .after = Estimate) |> 
-          relocate(statistic, .after = CI_upper)) |> 
-  relocate(Model) |> 
-  mutate(Model = factor(Model, levels = c("New species", "Lost species", "Richness", "Elevation")))
+                 Model = "Uppermost occurrence") |>
+          relocate(df, .after = Estimate) |>
+          relocate(statistic, .after = CI_upper)) |>
+  relocate(Model) |>
+  mutate(Model = factor(Model, levels = c("Species richness", "New species", "Lost species", "Uppermost occurrence"))) |>
+  mutate(Model = recode(Model, "Species richness" = "Species\nrichness", "Uppermost occurrence" = "Uppermost\noccurrence"))
 
 contrasts_table <- contrasts_overview |>
   select(!c(df, statistic)) |> 
-  mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Alpine. Period 1 - Period 2",
-                              Contrast == "1G-2G" ~ "Generalist. Period 1 - Period 2",
-                              Contrast == "1A-1G" ~ "Period 1. Alpine - Generalist",
-                              Contrast == "2A-2G" ~ "Period 2. Alpine - Generalist")) |> 
+  mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Specialists. Period 1 – Period 2",
+                              Contrast == "1G-2G" ~ "Generalists. Period 1 - Period 2",
+                              Contrast == "1A-1G" ~ "Period 1. Specialists - Generalists",
+                              Contrast == "2A-2G" ~ "Period 2. Specialists - Generalists")) |> 
   flextable() |> 
   bg(part = "header", bg = "black") |> 
   color(part = "header", color = "white") |> 
@@ -869,10 +1042,12 @@ contrasts_table <- contrasts_overview |>
   hline(i = c(4, 8, 12)) |> 
   hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
   bold(i = ~ ((CI_lower * CI_upper) > 0), j = -1) |>
+  set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |> 
   align(part = "all", j = -c(1, 2), align = "center") |> 
   flextable::font(part = "all", fontname = "Times New Roman") |> 
   fontsize(size = 12) |> 
   autofit()
+contrasts_table
 contrasts_table |> save_as_image(path = "Results/Rate_changes.png")
 
 
@@ -892,6 +1067,12 @@ emmeans_figure |> ggsave(file = "Results/Rate_of_change.png", width = 20, height
 
 # Several ggplots
 
+richrate_figure <- richrate_results$emmeans_df |> 
+  gg_results() +
+  scale_x_continuous(limits = c(-0.4, 0.5),
+                     labels = NULL) +
+  labs(x = NULL, y = adj_label["richness"])
+
 turnew_figure <- turnew_results$emmeans_df |> 
   gg_results() +
   scale_x_continuous(limits = c(-0.4, 0.5),
@@ -900,22 +1081,18 @@ turnew_figure <- turnew_results$emmeans_df |>
 
 turlost_figure <- turlost_results$emmeans_df |> 
   gg_results() +
-  scale_x_continuous(limits = c(-0.4, 0.5),
-                     labels = NULL) +
-  labs(x = NULL, y = adj_label["lost"])
-
-richrate_figure <- richrate_results$emmeans_df |> 
-  gg_results() +
   scale_x_continuous(limits = c(-0.4, 0.5)) +
-  labs(x = "Rate (number of species / year)", y = adj_label["richness"])
+  labs(x = "Rate (species&nbsp;year<sup>-1</sup>&nbsp;summit<sup>-1</sup>)", y = adj_label["lost"]) +
+  theme(axis.title.x = element_markdown())
 
 elerate_all_figure <- elerate_all_results$emmeans_df |> 
   gg_results() +
   scale_x_continuous(limits = c(-0.06, 0.10)) +
-  labs(x = "Rate (metres / year)", y = adj_label["elevation"])
+  labs(x = "Rate (metres&nbsp;year<sup>-1</sup>&nbsp;summit<sup>-1</sup>)", y = adj_label["elevation"]) +
+  theme(axis.title.x = element_markdown())
 
 results_figure_stack <- ggarrange(
-  plotlist = list(turnew_figure, turlost_figure, richrate_figure, elerate_all_figure),
+  plotlist = list(richrate_figure, turnew_figure, turlost_figure, elerate_all_figure),
   ncol = 1,
   nrow = 4,
   align = "v",
@@ -926,34 +1103,162 @@ results_figure_stack
 results_figure_stack |> ggsave(file = "Results/Rate_of_change_period.png", width = 20, height = 15, units = "cm")
 
 
-### For the appendix
-
-eleextra_emmeans <- elerate_all_results$emmeans_df |> 
-  select(!c(SE, p_value)) |> 
-  mutate(Model = "all") |> 
-  rbind(elerate_rem_results$emmeans_df |> 
-          select(!c(SE, p_value)) |> 
-          mutate(Model = "rem")) |> 
-  rbind(elerate_new_results$emmeans_df |> 
-          select(!c(SE, p_value)) |> 
-          mutate(Model = "newer")) |> 
-  relocate(Model) |> 
-  mutate(Model = factor(Model, levels = c("all", "rem", "newer")))
-
-eleextra_figure <- eleextra_emmeans |> gg_results() +
-  facet_grid(rows = vars(Model), switch = "y", labeller = as_labeller(adj_label)) +
-  scale_y_discrete(position = "right", labels = adj_label) +
-  labs(x = "Rate of change") +
-  theme(panel.spacing.y = unit(1, "lines"),
-        text = element_text(size = 16),
-        strip.text.y.left = element_markdown(angle = 0, hjust = 0),
-        axis.title.y = element_blank())
-eleextra_figure |> ggsave(file = "Results/Extra/Altitudinal_change.png", width = 20, height = 15, units = "cm")
 
 
+# Variance----
+
+# We noticed that variance seems to be greater in period 2 for most models. We address it here
+
+## Richness
+
+richrate_disp <- richrate_modh |> 
+  emmeans(~ period, component = "disp") |>
+  as.data.frame() |>
+  transmute(period,
+            logvar = emmean,
+            logvar_lwr = lower.CL,
+            logvar_upr = upper.CL,
+            variance = exp(logvar), # Back-transform to variance with 95% CIs
+            var_lwr = exp(logvar_lwr),
+            var_upr = exp(logvar_upr))
+richrate_disp
+
+## Lost species
+
+turlost_disp <- turlost_modh |> 
+  emmeans(~ period * specialisation, component = "disp") |>
+  as.data.frame() |> 
+  transmute(period,
+            specialisation,
+            logvar = emmean,
+            logvar_lwr = lower.CL,
+            logvar_upr = upper.CL,
+            variance = exp(logvar), # Back-transform to variance with 95% CIs
+            var_lwr = exp(logvar_lwr),
+            var_upr = exp(logvar_upr))
+turlost_disp
 
 
-# Nature type ~ ...----
+## Elevational change
+
+elerate_all_disp <- elerate_all_tmod3per |> 
+  spread_draws(b_sigma_Intercept, b_sigma_periodperiod2) |>
+  mutate(logvar_period1 = b_sigma_Intercept,
+         logvar_period2 = b_sigma_Intercept + b_sigma_periodperiod2,
+         var_period1 = exp(b_sigma_Intercept),
+         var_period2 = exp(b_sigma_Intercept + b_sigma_periodperiod2)) |>
+  pivot_longer(cols = c(logvar_period1, logvar_period2, var_period1, var_period2), 
+               names_to = c("scale", "period"), 
+               names_pattern = "(logvar|var)_period(\\d)") |> 
+  summarise(.by = c("period", "scale"),
+            estimate = mean(value),
+            lwr = quantile(value, 0.025),
+            upr = quantile(value, 0.975)) |> 
+  pivot_longer(cols = c(estimate, lwr, upr)) |> 
+  mutate(period = paste0("period", period),
+         names = paste0(scale, "_", name)) |> 
+  select((!c("scale", "name"))) |> 
+  pivot_wider(names_from = names, values_from = value) |> 
+  rename(logvar = logvar_estimate,
+         variance = var_estimate)
+elerate_all_disp
+
+
+## Table
+
+resvar_ft <- richrate_disp |> 
+  mutate(model = "Richness", 
+         specialisation = NA_real_,
+         joined = glue::glue("{round(variance, 3)} ({round(var_lwr, 3)}–{round(var_upr, 3)})")) |> 
+  select(model, specialisation, period, joined) |> 
+  pivot_wider(names_from = period, values_from = joined) |> 
+  rbind(turlost_disp |> 
+          mutate(model = "Lost species", 
+                 joined = glue::glue("{round(variance, 3)} ({round(var_lwr, 3)}–{round(var_upr, 3)})")) |> 
+          select(model, specialisation, period, joined) |> 
+          pivot_wider(names_from = period, values_from = joined)) |> 
+  rbind(elerate_all_disp |> 
+          mutate(model = "Uppermost occurrence", 
+                 specialisation = NA_real_,
+                 joined = glue::glue("{round(variance, 3)} ({round(var_lwr, 3)}–{round(var_upr, 3)})")) |> 
+          select(model, specialisation, period, joined) |> 
+          pivot_wider(names_from = period, values_from = joined)) |> 
+  mutate(specialisation = ifelse(specialisation == "alpine", "Specialist", "Generalist")) |> 
+  flextable() |> 
+  set_header_labels(model = "Model", 
+                    specialisation = "Specialisation group", 
+                    period1 = "Period 1", 
+                    period2 = "Period 2") |> 
+  bg(part = "header", bg = "black") |> 
+  color(part = "header", color = "white") |> 
+  bold(part = "header", bold = TRUE) |>
+  bg(part = "body", bg = "white") |> 
+  color(part = "body", color = "black") |>
+  align(part = "all", j = 3:4, align = "center") |> 
+  hline(i = c(1, 3)) |> 
+  flextable::font(part = "all", fontname = "Times New Roman") |> 
+  autofit()
+resvar_ft
+resvar_ft |> save_as_image(path = "Results/Variance_differences.png")
+
+
+
+
+# Nature type Analysis ~ ...----
+## All observations----
+
+all_species_types |> 
+  ggplot() +
+  geom_histogram(aes(x = total))
+
+alltypes_mod <- glmmTMB(
+  total ~
+    main_type * specialisation + log(habitat_decare) + (1 | summit),
+  family = nbinom2(),
+  data = all_species_types
+)
+
+alltypes_mod |> model_diagnosis() # No problems
+alltypes_mod |> model_homoscedasticity() # No problems
+alltypes_mod |> summary()
+
+alltypes_results <- alltypes_mod |> mod_types()
+
+alltypes_results$emmeans_df |> 
+  # mutate(specialisation = factor(specialisation, levels = c("generalist", "alpine"))) |>
+  # mutate(letters = c("A", "A", "B", "C", "C", "BC")) |> 
+  ggplot(aes(x = Estimate, y = Habitat, colour = specialisation, group = specialisation)) +
+  theme_minimal() +
+  geom_vline(xintercept = 0, colour = "black") +
+  geom_pointrangeh(aes(xmin = CI_lower, xmax = CI_upper), size = 0.8, fatten = 4, position = position_dodge2v(height = 0.4, reverse = TRUE)) +
+  # geom_point(size = 3, position = test25) +
+  # geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = test25) +
+  # geom_text(aes(x = CI_upper + 0.4, label = letters)) +
+  scale_x_continuous(name = "Number of species / 1000m2") +
+  scale_colour_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
+  scale_y_discrete(labels = adj_label, limits = rev) +
+  theme(text = element_text(size = 14, family = "serif"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(hjust = 0.35),
+        axis.text.x = element_text(margin = margin(t = 10, b = 10)),
+        panel.grid.major.y = element_blank(),
+        legend.position = "top",
+        legend.box.margin = margin(l = -10),
+        legend.title = element_text(margin = margin(b = 5, r = 40)),
+        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
+newtypes_figure
+newtypes_figure |> ggsave(file = "Results/Habitat_types.png", width = 20, height = 15, units = "cm")
+test25 <- 
+  ggstance::position_dodge2v(
+    height   = 0.6,     # <- this controls vertical separation between the two groups
+    preserve = "total", # keeps total stack height similar even if a group is missing
+    reverse  = TRUE     # draws the first level above; also affects legend if reversed
+  )
+
+
+
+
+## New observations----
 
 new_species_types |> 
   ggplot() +
@@ -961,14 +1266,14 @@ new_species_types |>
 
 newtypes_mod <- glmmTMB(
   total ~
-    main_type + offset(log(habitat_decare)) + (1 | summit),
+    main_type * specialisation + offset(log(habitat_decare)) + (1 | summit),
   family = nbinom2(),
   data = new_species_types
 )
-# I've tried including specialization and there is no difference
+# I've tried including specialisation and there is no difference
 
-newtypes_mod |> model_diagnosis()
-newtypes_mod |> model_homoscedasticity()
+newtypes_mod |> model_diagnosis() # Quantiles
+newtypes_mod |> model_homoscedasticity() # No problems
 newtypes_mod |> summary()
 
 newtypes_results <- newtypes_mod |> 
@@ -1235,7 +1540,7 @@ elevation_change_rate_mod |> summary()
 # 
 elerate_all_gbayes <- brm(
   rate ~ 
-    period * specialization + (1|summit) + (1|species),
+    period * specialisation + (1|summit) + (1|species),
   family = gaussian(), 
   data = elerate_all,
   seed = 811)
@@ -1243,7 +1548,7 @@ withr::with_seed(811, pp_check(elerate_all_gbayes, type = "dens_overlay")) # The
 
 elerate_all_tbayes <- brm(
   rate ~ 
-    period * specialization + (1|summit) + (1|species),
+    period * specialisation + (1|summit) + (1|species),
   family = student(), 
   data = elerate_all,
   seed = 811)
@@ -1254,7 +1559,7 @@ loo(elerate_all_gbayes, elerate_all_tbayes) # It seems student t is better, we h
 
 elerate_all_tbayesp <- brm(
   rate ~ 
-    period * specialization + (1 | summit) + (1 | species), 
+    period * specialisation + (1 | summit) + (1 | species), 
   family = student(), 
   prior = c(
     prior(normal(0, 0.5), class = "b"),
@@ -1285,7 +1590,7 @@ elerate_bayes_res <- tibble(
   fitted = fitted(elerate_all_tbayesp)[, "Estimate"],
   residuals = residuals(elerate_all_tbayesp)[, "Estimate"],
   period = elerate_all$period,
-  specialization = elerate_all$specialization,
+  specialisation = elerate_all$specialisation,
   summit = elerate_all$summit,
   species = elerate_all$species
 )
@@ -1298,7 +1603,7 @@ ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = period)) +
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
-ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = specialization)) +
+ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = specialisation)) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
   labs(
@@ -1310,7 +1615,7 @@ ggplot(elerate_bayes_res, aes(x = fitted, y = residuals, colour = specialization
 
 # It seems there might be some heteroskedasticity, with period 2 having greater variance
 pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "period") # Heteroskedasticity also displayed here
-pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "specialization") # Quite similar
+pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "specialisation") # Quite similar
 
 
 
@@ -1318,7 +1623,7 @@ pp_check(elerate_all_tbayesp, type = "dens_overlay_grouped", group = "specializa
 
 elerate_all_bayesh <- brm(
   bf(rate ~
-       period * specialization + (1|summit) + (1|species),
+       period * specialisation + (1|summit) + (1|species),
      sigma ~period),
   family = student(),
   prior = c(
@@ -1348,7 +1653,7 @@ elerate_all_bayesh_res <- tibble(
   fitted = fitted(elerate_all_bayesh)[, "Estimate"],
   residuals = residuals(elerate_all_bayesh)[, "Estimate"],
   period = elerate_all$period,
-  specialization = elerate_all$specialization,
+  specialisation = elerate_all$specialisation,
   summit = elerate_all$summit,
   species = elerate_all$species
 )
@@ -1364,7 +1669,7 @@ ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
 # Maybe more variance in period 2, but it looks quite good
 withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "period")) # The distributions fit relatively well (though both miss the bump on the right)
 
-ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
+ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = specialisation)) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
   labs(
@@ -1373,7 +1678,7 @@ ggplot(elerate_all_bayesh_res, aes(x = fitted, y = residuals, colour = specializ
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
-withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "specialization"))
+withr::with_seed(811, pp_check(elerate_all_bayesh, type = "dens_overlay_grouped", group = "specialisation"))
 # Quite similar distributions, no need to adjust for it
 
 # Random effect structure
@@ -1396,7 +1701,7 @@ elerate_all_results <- elerate_all_bayesh |>
 
 elerate_rem_bayesh <- brm(
   bf(rate ~
-       period * specialization + (1|summit) + (1|species),
+       period * specialisation + (1|summit) + (1|species),
      sigma ~period),
   family = student(),
   prior = c(
@@ -1424,7 +1729,7 @@ elerate_rem_bayesh_res <- tibble(
   fitted = fitted(elerate_rem_bayesh)[, "Estimate"],
   residuals = residuals(elerate_rem_bayesh)[, "Estimate"],
   period = elerate_remained$period,
-  specialization = elerate_remained$specialization,
+  specialisation = elerate_remained$specialisation,
   summit = elerate_remained$summit,
   species = elerate_remained$species
 )
@@ -1440,7 +1745,7 @@ ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
 # Maybe more variance in period 2, but it looks quite good
 withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "period"))
 
-ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
+ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = specialisation)) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
   labs(
@@ -1449,7 +1754,7 @@ ggplot(elerate_rem_bayesh_res, aes(x = fitted, y = residuals, colour = specializ
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
-withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "specialization"))
+withr::with_seed(811, pp_check(elerate_rem_bayesh, type = "dens_overlay_grouped", group = "specialisation"))
 # Very similar distributions
 
 # Random effect structure
@@ -1473,7 +1778,7 @@ elerate_rem_results <- elerate_rem_bayesh |>
 
 elerate_new_bayesh <- brm(
   bf(rate ~
-       period * specialization + (1|summit) + (1|species),
+       period * specialisation + (1|summit) + (1|species),
      sigma ~period),
   family = student(),
   data = elerate_new,
@@ -1498,7 +1803,7 @@ elerate_new_bayesh_res <- tibble(
   fitted = fitted(elerate_new_bayesh)[, "Estimate"],
   residuals = residuals(elerate_new_bayesh)[, "Estimate"],
   period = elerate_new$period,
-  specialization = elerate_new$specialization,
+  specialisation = elerate_new$specialisation,
   summit = elerate_new$summit,
   species = elerate_new$species
 )
@@ -1514,7 +1819,7 @@ ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = period)) 
 withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "period")) # Some heteroskedasticity, but doesn't look that bad
 
 
-ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = specialization)) +
+ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = specialisation)) +
   geom_point(size = 3) +
   geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
   labs(
@@ -1523,7 +1828,7 @@ ggplot(elerate_new_bayesh_res, aes(x = fitted, y = residuals, colour = specializ
     title = "Residuals vs Fitted Values"
   ) +
   theme_minimal()
-withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "specialization"))
+withr::with_seed(811, pp_check(elerate_new_bayesh, type = "dens_overlay_grouped", group = "specialisation"))
 
 # Random effect structure
 elerate_new_bayesh |> ranef()
@@ -1539,5 +1844,30 @@ elerate_new_bayesh |> summary()
 elerate_new_results <- elerate_new_bayesh |> 
   mod_summary()
 
+
+
+### For the appendix----
+
+eleextra_emmeans <- elerate_all_results$emmeans_df |> 
+  select(!c(SE, p_value)) |> 
+  mutate(Model = "all") |> 
+  rbind(elerate_rem_results$emmeans_df |> 
+          select(!c(SE, p_value)) |> 
+          mutate(Model = "rem")) |> 
+  rbind(elerate_new_results$emmeans_df |> 
+          select(!c(SE, p_value)) |> 
+          mutate(Model = "newer")) |> 
+  relocate(Model) |> 
+  mutate(Model = factor(Model, levels = c("all", "rem", "newer")))
+
+eleextra_figure <- eleextra_emmeans |> gg_results() +
+  facet_grid(rows = vars(Model), switch = "y", labeller = as_labeller(adj_label)) +
+  scale_y_discrete(position = "right", labels = adj_label) +
+  labs(x = "Rate of change") +
+  theme(panel.spacing.y = unit(1, "lines"),
+        text = element_text(size = 16),
+        strip.text.y.left = element_markdown(angle = 0, hjust = 0),
+        axis.title.y = element_blank())
+eleextra_figure |> ggsave(file = "Results/Extra/Altitudinal_change.png", width = 20, height = 15, units = "cm")
 
 
