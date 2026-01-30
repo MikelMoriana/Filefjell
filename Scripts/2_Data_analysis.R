@@ -28,6 +28,252 @@ filefjell_simplified <- filefjell_data_clean |>
 
 
 
+## Turnover overview----
+
+# General
+
+status_survey <- filefjell_simplified |>
+  pivot_wider(names_from = year, values_from = distance) |>
+  mutate(status1 = case_when(!is.na(first) ~ "1972Present",
+                             is.na(first) ~ "1972Absent")) |>
+  mutate(status2 = case_when(!is.na(first) & !is.na(second) ~ "2009Remained",
+                             !is.na(first) & is.na(second) ~ "2009Lost",
+                             is.na(first) & !is.na(second) ~ "2009New",
+                             is.na(first) & is.na(second) ~ "2009Absent")) |>
+  mutate(status3 = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "2024Remained",
+                             !is.na(first) & !is.na(second) & is.na(third) ~ "2024Lost",
+                             !is.na(first) & is.na(second) & !is.na(third) ~ "2024Reappeared",
+                             !is.na(first) & is.na(second) & is.na(third) ~ "2024Stayed_lost",
+                             is.na(first) & !is.na(second) & !is.na(third) ~ "2024Stayed",
+                             is.na(first) & !is.na(second) == 1 & is.na(third) ~ "2024Disappeared",
+                             is.na(first) & is.na(second) & !is.na(third) ~ "2024New")) |>
+  select(status1:status3) |>
+  pivot_longer(cols = status1:status3, names_to = "survey", values_to = "status") |>
+  summarise(.by = "status", total = n()) |>
+  arrange(status)
+
+header_map <- tibble(
+  col_keys = c("1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
+  level1   = c("1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
+)
+
+status_survey_ft <- tibble(
+  "1972status" = c("Present",
+                   rep("", 6),
+                   "Total present"),
+  "1972total" = c(status_survey |> filter(status == "1972Present") |> pull(total),
+                  rep("", 6),
+                  status_survey |> filter(status == "1972Present") |> pull(total)),
+  "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present"),
+  "2008/09total" = c(status_survey |> filter(status == "2009Remained") |> pull(total), "",
+                     status_survey |> filter(status == "2009Lost") |> pull(total), "",
+                     status_survey |> filter(status == "2009New") |> pull(total), "", "",
+                     (status_survey |> filter(status == "2009Remained") |> pull(total)) + (status_survey |> filter(status == "2009New") |> pull(total))),
+  "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
+  "2024/25total" = c(status_survey |> filter(status == "2024Remained") |> pull(total),
+                     status_survey |> filter(status == "2024Lost") |> pull(total),
+                     status_survey |> filter(status == "2024Reappeared") |> pull(total),
+                     status_survey |> filter(status == "2024Stayed_lost") |> pull(total),
+                     status_survey |> filter(status == "2024Stayed") |> pull(total),
+                     status_survey |> filter(status == "2024Disappeared") |> pull(total),
+                     status_survey |> filter(status == "2024New") |> pull(total),
+                     (status_survey |> filter(status == "2024Remained") |> pull(total)) + (status_survey |> filter(status == "2024Reappeared") |> pull(total)) + (status_survey |> filter(status == "2024Stayed") |> pull(total)) + (status_survey |> filter(status == "2024New") |> pull(total)))
+) |>
+  flextable() |>
+  set_header_df(mapping = header_map, key = "col_keys") |>
+  merge_h(part = "header") |>
+  bg(part = "header", bg = "black") |>
+  color(part = "header", color = "white") |>
+  bold(part = "header") |>
+  align(part = "header", align = "center") |>
+  bg(part = "body", bg = "white") |>
+  color(part = "body", color = "black") |>
+  bg(part = "body", i = 8, bg = "grey") |>
+  hline(i = 4) |>
+  hline(i = 2, j = 3:6) |>
+  hline(i = 6, j = 3:6) |>
+  hline(i = 7) |>
+  border(i = c(1:6, 8), j = 3, border.left = officer::fp_border(color = "black")) |>
+  border(i = 1:8, j = 5, border.left = officer::fp_border(color = "black")) |>
+  border(part = "header", border.left = officer::fp_border(color = "white")) |>
+  vline_left() |>
+  vline_right() |>
+  align(part = "body", align = "left") |>
+  align(part = "body", j = c(2, 4, 6), align = "center") |>
+  flextable::font(part = "all", fontname = "Times New Roman") |>
+  autofit()
+status_survey_ft
+
+status_survey_ft |> save_as_image(path = "Results/Status_survey.png")
+
+
+# By specialisation
+
+status_spe_survey <- filefjell_simplified |>
+  pivot_wider(names_from = year, values_from = distance) |>
+  mutate(status1 = case_when(!is.na(first) ~ "1972Present",
+                             is.na(first) ~ "1972Absent")) |>
+  mutate(status2 = case_when(!is.na(first) & !is.na(second) ~ "2009Remained",
+                             !is.na(first) & is.na(second) ~ "2009Lost",
+                             is.na(first) & !is.na(second) ~ "2009New",
+                             is.na(first) & is.na(second) ~ "2009Absent")) |>
+  mutate(status3 = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "2024Remained",
+                             !is.na(first) & !is.na(second) & is.na(third) ~ "2024Lost",
+                             !is.na(first) & is.na(second) & !is.na(third) ~ "2024Reappeared",
+                             !is.na(first) & is.na(second) & is.na(third) ~ "2024Stayed_lost",
+                             is.na(first) & !is.na(second) & !is.na(third) ~ "2024Stayed",
+                             is.na(first) & !is.na(second) == 1 & is.na(third) ~ "2024Disappeared",
+                             is.na(first) & is.na(second) & !is.na(third) ~ "2024New")) |>
+  select(specialisation, status1:status3) |>
+  pivot_longer(cols = status1:status3, names_to = "survey", values_to = "status") |>
+  summarise(.by = c("specialisation", "status"), total = n()) |>
+  arrange(status)
+
+header_spe_map <- tibble(
+  col_keys = c("specialisation", "1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
+  level1   = c("Specialisation", "1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
+)
+
+status_spe_survey_ft <- tibble(
+  "specialisation" = c("Specialists",
+                       rep("", 7),
+                       "Generalists",
+                       rep("", 7)),
+  "1972status" = c("Present",
+                   rep("", 6),
+                   "Total specialists",
+                   "Present",
+                   rep("", 6),
+                   "Total generalists"),
+  "1972total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "1972Present") |> pull(total),
+                  rep("", 6),
+                  status_spe_survey |> filter(specialisation == "alpine" & status == "1972Present") |> pull(total),
+                  status_spe_survey |> filter(specialisation == "generalist" & status == "1972Present") |> pull(total),
+                  rep("", 6),
+                  status_spe_survey |> filter(specialisation == "generalist" & status == "1972Present") |> pull(total)),
+  "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present",
+                      "Remained", "", "Lost", "", "New", "", "", "Total present"),
+  "2008/09total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "2009Remained") |> pull(total),
+                     "",
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2009Lost") |> pull(total),
+                     "",
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2009New") |> pull(total),
+                     "",
+                     "",
+                     (status_spe_survey |> filter(specialisation == "alpine" & status == "2009Remained") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "alpine" & status == "2009New") |> pull(total)),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2009Remained") |> pull(total),
+                     "",
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2009Lost") |> pull(total),"
+                     ",
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2009New") |> pull(total),
+                     "",
+                     "",
+                     (status_spe_survey |> filter(specialisation == "generalist" & status == "2009Remained") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "generalist" & status == "2009New") |> pull(total))),
+  "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present",
+                      "Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
+  "2024/25total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "2024Remained") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2024Lost") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2024Reappeared") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed_lost") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2024Disappeared") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "alpine" & status == "2024New") |> pull(total),
+                     (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Remained") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Reappeared") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "alpine" & status == "2024New") |> pull(total)),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024Remained") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024Lost") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024Reappeared") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed_lost") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024Disappeared") |> pull(total),
+                     status_spe_survey |> filter(specialisation == "generalist" & status == "2024New") |> pull(total),
+                     (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Remained") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Reappeared") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed") |> pull(total)) +
+                       (status_spe_survey |> filter(specialisation == "generalist" & status == "2024New") |> pull(total)))
+) |>
+  flextable() |>
+  set_header_df(mapping = header_spe_map, key = "col_keys") |>
+  merge_h(part = "header") |>
+  bg(part = "header", bg = "black") |>
+  color(part = "header", color = "white") |>
+  bold(part = "header") |>
+  align(part = "header", align = "center") |>
+  bg(part = "body", bg = "white") |>
+  color(part = "body", color = "black") |>
+  bg(part = "body", i = c(8, 16), bg = "grey") |>
+  hline(i = c(4, 12), j = 2:7) |>
+  hline(i = c(2, 10), j = 4:7) |>
+  hline(i = c(6, 14), j = 4:7) |>
+  border(i = 8, border.bottom = officer::fp_border(width = 2)) |>
+  border(i = c(1:6, 8, 9:14, 16), j = 4, border.left = officer::fp_border(color = "black")) |>
+  border(i = 1:16, j = c(2, 6), border.left = officer::fp_border(color = "black")) |>
+  border(part = "header", border.left = officer::fp_border(color = "white")) |>
+  vline_left() |>
+  vline_right() |>
+  align(part = "body", align = "left") |>
+  align(part = "body", j = c(3, 5, 7), align = "center") |>
+  flextable::font(part = "all", fontname = "Times New Roman") |>
+  autofit()
+status_spe_survey_ft
+
+status_spe_survey_ft |> save_as_image(path = "Results/Status_spe_survey.png")
+
+
+# # Turnover by distance to top
+# 
+# turnover_status <- elevation_wide |>
+#   select(!c(first:third, period1, period2)) |>
+#   mutate(development = case_when(!is.na(distance1) & !is.na(distance2) & !is.na(distance3) ~ "Remained",
+#                                  !is.na(distance1) & !is.na(distance2) & is.na(distance3) ~ "Disappeared2",
+#                                  !is.na(distance1) & is.na(distance2) & !is.na(distance3) ~ "Back_forth",
+#                                  !is.na(distance1) & is.na(distance2) & is.na(distance3) ~ "Disappeared1",
+#                                  is.na(distance1) & !is.na(distance2) & !is.na(distance3) ~ "Appeared1",
+#                                  is.na(distance1) & !is.na(distance2) & is.na(distance3) ~ "Forth_back",
+#                                  is.na(distance1) & is.na(distance2) & !is.na(distance3) ~ "Appeared2")) |>
+#   pivot_longer(cols = c(distance1:distance3), names_to = "measurement", values_to = "distance") |>
+#   filter(!is.na(distance)) |>
+#   mutate(altitude = (-1)*distance + 32,
+#          development = factor(development, levels = c("Remained", "Disappeared2", "Back_forth", "Disappeared1", "Appeared1", "Forth_back", "Appeared2")))
+# 
+# turnover_status |>
+#   ggplot() +
+#   geom_histogram(aes(x = (altitude+1)/34))
+# 
+# turdev_mod <- glmmTMB(
+#   (altitude+1)/34 ~
+#     development,
+#   family = beta_family(),
+#   dispformula = ~development,
+#   data = turnover_status)
+# turdev_mod |> model_diagnosis()
+# turdev_mod |> model_homoscedasticity()
+# turdev_mod |> summary()
+# 
+# turdev_emmeans <- turdev_mod |> emmeans(~development) |> contrast(method = "pairwise")
+# turdev_emmeans
+# turdev_letters <- turnover_status |>
+#   select(development) |>
+#   mutate(levels = case_when(development == "Remained" ~ "A",
+#                             development == "Disappeared2" ~ "BC",
+#                             development == "Back_forth" ~ "BC",
+#                             development == "Disappeared1" ~ "BC",
+#                             development == "Appeared1" ~ "B",
+#                             development == "Forth_back" ~ "C",
+#                             development == "Appeared2" ~ "B"))
+# 
+# turnover_status |>
+#   ggplot() +
+#   geom_boxplot(aes(x = development, y = altitude)) +
+#   geom_text(data = turdev_letters, aes(x = development, y = 33, label = levels))
+
+
+
+
 ## Richness----
 
 richness <- filefjell_simplified |>
@@ -202,207 +448,6 @@ new_species_types <- type_species |>
 
 
 # Rate Analyses----
-## Turnover overview----
-
-### Overview tables
-
-# General
-
-status_year <- turnover_species |> 
-  filter(period == "period1") |> 
-  select(!c(elevation, specialisation, development:rate, turnover1:rate2)) |> 
-  mutate(first = case_when(presence1 == 1 ~ "1972Present",
-                           presence1 == 0 ~ "1972Absent")) |> 
-  mutate(second = case_when(presence1 == 1 & presence2 == 1 ~ "2009Remained",
-                            presence1 == 1 & presence2 == 0 ~ "2009Lost",
-                            presence1 == 0 & presence2 == 1 ~ "2009New",
-                            presence1 == 0 & presence2 == 0 ~ "2009Absent")) |> 
-  mutate(third = case_when(presence1 == 1 & presence2 == 1 & presence3 == 1 ~ "2024Remained",
-                           presence1 == 1 & presence2 == 1 & presence3 == 0 ~ "2024Lost",
-                           presence1 == 1 & presence2 == 0 & presence3 == 1 ~ "2024Reappeared",
-                           presence1 == 1 & presence2 == 0 & presence3 == 0 ~ "2024Stayed_lost",
-                           presence1 == 0 & presence2 == 1 & presence3 == 1 ~ "2024Stayed",
-                           presence1 == 0 & presence2 == 1 & presence3 == 0 ~ "2024Disappeared",
-                           presence1 == 0 & presence2 == 0 & presence3 == 1 ~ "2024New")) |> 
-  select(first:third) |> 
-  pivot_longer(cols = first:third, names_to = "survey", values_to = "status") |> 
-  summarise(.by = "status", total = n()) |> 
-  arrange(status)
-
-header_map <- tibble(
-  col_keys = c("1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
-  level1   = c("1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
-)
-
-status_year_ft <- tibble(
-  "1972status" = c("Present", 
-                rep("", 6),
-                "Total present"),
-  "1972total" = c(status_year |> filter(status == "1972Present") |> pull(total),
-                rep("", 6),
-                status_year |> filter(status == "1972Present") |> pull(total)),
-  "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present"),
-  "2008/09total" = c(status_year |> filter(status == "2009Remained") |> pull(total), "",
-                status_year |> filter(status == "2009Lost") |> pull(total), "",
-                status_year |> filter(status == "2009New") |> pull(total), "", "",
-                (status_year |> filter(status == "2009Remained") |> pull(total)) + (status_year |> filter(status == "2009New") |> pull(total))),
-  "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
-  "2024/25total" = c(status_year |> filter(status == "2024Remained") |> pull(total),
-                status_year |> filter(status == "2024Lost") |> pull(total),
-                status_year |> filter(status == "2024Reappeared") |> pull(total),
-                status_year |> filter(status == "2024Stayed_lost") |> pull(total),
-                status_year |> filter(status == "2024Stayed") |> pull(total),
-                status_year |> filter(status == "2024Disappeared") |> pull(total),
-                status_year |> filter(status == "2024New") |> pull(total),
-                (status_year |> filter(status == "2024Remained") |> pull(total)) + (status_year |> filter(status == "2024Reappeared") |> pull(total)) + (status_year |> filter(status == "2024Stayed") |> pull(total)) + (status_year |> filter(status == "2024New") |> pull(total)))
-) |> 
-  flextable() |>
-  set_header_df(mapping = header_map, key = "col_keys") |> 
-  merge_h(part = "header") |> 
-  bg(part = "header", bg = "black") |> 
-  color(part = "header", color = "white") |> 
-  bold(part = "header") |> 
-  align(part = "header", align = "center") |> 
-  bg(part = "body", bg = "white") |> 
-  color(part = "body", color = "black") |> 
-  bg(part = "body", i = 8, bg = "grey") |> 
-  hline(i = 4) |>
-  hline(i = 2, j = 3:6) |> 
-  hline(i = 6, j = 3:6) |> 
-  hline(i = 7) |> 
-  border(i = c(1:6, 8), j = 3, border.left = officer::fp_border(color = "black")) |> 
-  border(i = 1:8, j = 5, border.left = officer::fp_border(color = "black")) |>
-  border(part = "header", border.left = officer::fp_border(color = "white")) |> 
-  vline_left() |> 
-  vline_right() |> 
-  align(part = "body", align = "left") |> 
-  align(part = "body", j = c(2, 4, 6), align = "center") |> 
-  flextable::font(part = "all", fontname = "Times New Roman") |> 
-  autofit()
-status_year_ft
-
-status_year_ft |> save_as_image(path = "Results/Status_year.png")
-
-
-# By specialisation
-
-turnover_grouped |> 
-  pivot_wider(names_from = specialisation, values_from = total)
-# development   alpine  generalist
-# Remained         220         121
-# Appeared1        114         111
-# Appeared2         48          70
-# Disappeared1       1           6
-# Disappeared2      10           4
-# Forth_back        21          36
-# Back_forth        10           4
-
-observations <- elevation_wide |> 
-  select(!c(first:third, period1, period2)) |> 
-  pivot_longer(cols = c(distance1:distance3), names_to = "year", values_to = "distance") |> 
-  mutate(year = case_when(year == "distance1" ~ 1972,
-                          year == "distance2" ~ 2009,
-                          year == "distance3" ~ 2024)) |> 
-  filter(!is.na(distance)) |> 
-  summarise(.by = c(year, specialisation), observations = n()) |> 
-  arrange(year) |> 
-  pivot_wider(names_from = year, values_from = observations) |> 
-  mutate(specialisation = ifelse(specialisation == "alpine", "Alpine", "Generalist")) |> 
-  rbind(c("extra", "extra1", "extra2", "extra3"), 
-        c("specialisation", "1972", "2009", "2024")) |> 
-  row_to_names(row_number = 3, remove_rows_above = FALSE) |> 
-  mutate(extra = factor(extra, levels = c("specialisation", "Alpine", "Generalist"))) |> 
-  arrange(extra)
-
-turnover_development <- turnover_grouped |> 
-  pivot_wider(names_from = specialisation, values_from = total) |> 
-  mutate(status1 = case_when(development %in% c("Remained", "Disappeared2") ~ "Remained",
-                             development %in% c("Appeared1", "Forth_back") ~ "New",
-                             development %in% c("Disappeared1", "Back_forth") ~ "Lost",
-                             development == "Appeared2" ~ NA),
-         status2 = case_when(development %in% c("Remained", "Appeared1") ~ "Remained",
-                             development %in% c("Appeared2", "Back_forth") ~ "New",
-                             development %in% c("Forth_back", "Disappeared2") ~ "Lost",
-                             development == "Disappeared1" ~ NA)) |> 
-  relocate(status1, status2) |> 
-  rbind(c("extra", "extra1", "extras", "extra2", "extra3"), 
-        c("Status 2009", "Status 2024", "development", "Alpine", "Generalist")) |> 
-  row_to_names(row_number = 8, remove_rows_above = FALSE) |> 
-  mutate(extras = factor(extras, levels = c("development", "Remained", "Appeared1", "Forth_back", "Disappeared1", "Back_forth", "Appeared2", "Disappeared2"))) |>
-  arrange(extras) |> 
-  select(!extras)
-
-observations_turnover_ft <- observations |> 
-  rbind(turnover_development) |> 
-  mutate(across(where(is.factor), as.character)) |> 
-  row_to_names(row_number = 1) |> 
-  flextable() |> 
-  bg(part = "header", bg = "black") |> 
-  color(part = "header", color = "white") |> 
-  bold(part = "header") |> 
-  bg(part = "body", bg = "white") |> 
-  color(part = "body", color = "black") |> 
-  bg(part = "body", i = 3, bg = "black") |> 
-  color(part = "body", i = 3, color = "white") |> 
-  bold(part = "body", i = 3) |> 
-  align(part = "all", j = 2:4, align = "center") |> 
-  align(part = "body", i = 3:10, j = 2, align = "left") |> 
-  flextable::font(part = "all", fontname = "Times New Roman") |> 
-  autofit()
-
-observations_turnover_ft |> save_as_image(path = "Results/Observations_turnover.png")
-
-
-# Turnover by distance to top
-
-turnover_status <- elevation_wide |> 
-  select(!c(first:third, period1, period2)) |> 
-  mutate(development = case_when(!is.na(distance1) & !is.na(distance2) & !is.na(distance3) ~ "Remained",
-                                 !is.na(distance1) & !is.na(distance2) & is.na(distance3) ~ "Disappeared2",
-                                 !is.na(distance1) & is.na(distance2) & !is.na(distance3) ~ "Back_forth",
-                                 !is.na(distance1) & is.na(distance2) & is.na(distance3) ~ "Disappeared1",
-                                 is.na(distance1) & !is.na(distance2) & !is.na(distance3) ~ "Appeared1",
-                                 is.na(distance1) & !is.na(distance2) & is.na(distance3) ~ "Forth_back",
-                                 is.na(distance1) & is.na(distance2) & !is.na(distance3) ~ "Appeared2")) |>
-  pivot_longer(cols = c(distance1:distance3), names_to = "measurement", values_to = "distance") |> 
-  filter(!is.na(distance)) |> 
-  mutate(altitude = (-1)*distance + 32,
-         development = factor(development, levels = c("Remained", "Disappeared2", "Back_forth", "Disappeared1", "Appeared1", "Forth_back", "Appeared2")))
-
-turnover_status |> 
-  ggplot() + 
-  geom_histogram(aes(x = (altitude+1)/34))
-
-turdev_mod <- glmmTMB(
-  (altitude+1)/34 ~ 
-    development,
-  family = beta_family(),
-  dispformula = ~development,
-  data = turnover_status)
-turdev_mod |> model_diagnosis()
-turdev_mod |> model_homoscedasticity()
-turdev_mod |> summary()
-
-turdev_emmeans <- turdev_mod |> emmeans(~development) |> contrast(method = "pairwise")
-turdev_emmeans
-turdev_letters <- turnover_status |> 
-  select(development) |> 
-  mutate(levels = case_when(development == "Remained" ~ "A",
-                            development == "Disappeared2" ~ "BC",
-                            development == "Back_forth" ~ "BC",
-                            development == "Disappeared1" ~ "BC",
-                            development == "Appeared1" ~ "B",
-                            development == "Forth_back" ~ "C",
-                            development == "Appeared2" ~ "B"))
-
-turnover_status |> 
-  ggplot() +
-  geom_boxplot(aes(x = development, y = altitude)) +
-  geom_text(data = turdev_letters, aes(x = development, y = 33, label = levels))
-
-
-
-
 ## Richness----
 
 ## Whole summit
