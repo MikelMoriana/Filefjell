@@ -310,6 +310,201 @@ list(
                               year %in% c(2008, 2009) ~ "second",
                               year %in% c(2024, 2025) ~ "third"))
   ),
+  # Status overview----
+  tar_target(
+    name = status_survey,
+    command = filefjell_simplified |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(status1 = case_when(!is.na(first) ~ "1972Present",
+                                 is.na(first) ~ "1972Absent")) |>
+      mutate(status2 = case_when(!is.na(first) & !is.na(second) ~ "2009Remained",
+                                 !is.na(first) & is.na(second) ~ "2009Lost",
+                                 is.na(first) & !is.na(second) ~ "2009New",
+                                 is.na(first) & is.na(second) ~ "2009Absent")) |>
+      mutate(status3 = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "2024Remained",
+                                 !is.na(first) & !is.na(second) & is.na(third) ~ "2024Lost",
+                                 !is.na(first) & is.na(second) & !is.na(third) ~ "2024Reappeared",
+                                 !is.na(first) & is.na(second) & is.na(third) ~ "2024Stayed_lost",
+                                 is.na(first) & !is.na(second) & !is.na(third) ~ "2024Stayed",
+                                 is.na(first) & !is.na(second) == 1 & is.na(third) ~ "2024Disappeared",
+                                 is.na(first) & is.na(second) & !is.na(third) ~ "2024New")) |>
+      select(status1:status3) |>
+      pivot_longer(cols = status1:status3, names_to = "survey", values_to = "status") |>
+      summarise(.by = "status", total = n()) |>
+      arrange(status)
+  ),
+  tar_target(
+    name = header_map,
+    command = tibble(
+      col_keys = c("1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
+      level1   = c("1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
+    )
+  ),
+  tar_target(
+    name = status_survey_ft,
+    command = tibble(
+      "1972status" = c("Present",
+                       rep("", 6),
+                       "Total present"),
+      "1972total" = c(status_survey |> filter(status == "1972Present") |> pull(total),
+                      rep("", 6),
+                      status_survey |> filter(status == "1972Present") |> pull(total)),
+      "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present"),
+      "2008/09total" = c(status_survey |> filter(status == "2009Remained") |> pull(total), "",
+                         status_survey |> filter(status == "2009Lost") |> pull(total), "",
+                         status_survey |> filter(status == "2009New") |> pull(total), "", "",
+                         (status_survey |> filter(status == "2009Remained") |> pull(total)) + (status_survey |> filter(status == "2009New") |> pull(total))),
+      "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
+      "2024/25total" = c(status_survey |> filter(status == "2024Remained") |> pull(total),
+                         status_survey |> filter(status == "2024Lost") |> pull(total),
+                         status_survey |> filter(status == "2024Reappeared") |> pull(total),
+                         status_survey |> filter(status == "2024Stayed_lost") |> pull(total),
+                         status_survey |> filter(status == "2024Stayed") |> pull(total),
+                         status_survey |> filter(status == "2024Disappeared") |> pull(total),
+                         status_survey |> filter(status == "2024New") |> pull(total),
+                         (status_survey |> filter(status == "2024Remained") |> pull(total)) + (status_survey |> filter(status == "2024Reappeared") |> pull(total)) + (status_survey |> filter(status == "2024Stayed") |> pull(total)) + (status_survey |> filter(status == "2024New") |> pull(total)))
+    ) |>
+      flextable() |>
+      set_header_df(mapping = header_map, key = "col_keys") |>
+      merge_h(part = "header") |>
+      bg(part = "header", bg = "black") |>
+      color(part = "header", color = "white") |>
+      bold(part = "header") |>
+      align(part = "header", align = "center") |>
+      bg(part = "body", bg = "white") |>
+      color(part = "body", color = "black") |>
+      bg(part = "body", i = 8, bg = "grey") |>
+      hline(i = 4) |>
+      hline(i = 2, j = 3:6) |>
+      hline(i = 6, j = 3:6) |>
+      hline(i = 7) |>
+      border(i = c(1:6, 8), j = 3, border.left = officer::fp_border(color = "black")) |>
+      border(i = 1:8, j = 5, border.left = officer::fp_border(color = "black")) |>
+      border(part = "header", border.left = officer::fp_border(color = "white")) |>
+      vline_left() |>
+      vline_right() |>
+      align(part = "body", align = "left") |>
+      align(part = "body", j = c(2, 4, 6), align = "center") |>
+      flextable::font(part = "all", fontname = "Times New Roman") |>
+      autofit()
+  ),
+  tar_target(
+    name = status_spe_survey,
+    command = filefjell_simplified |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(status1 = case_when(!is.na(first) ~ "1972Present",
+                                 is.na(first) ~ "1972Absent")) |>
+      mutate(status2 = case_when(!is.na(first) & !is.na(second) ~ "2009Remained",
+                                 !is.na(first) & is.na(second) ~ "2009Lost",
+                                 is.na(first) & !is.na(second) ~ "2009New",
+                                 is.na(first) & is.na(second) ~ "2009Absent")) |>
+      mutate(status3 = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "2024Remained",
+                                 !is.na(first) & !is.na(second) & is.na(third) ~ "2024Lost",
+                                 !is.na(first) & is.na(second) & !is.na(third) ~ "2024Reappeared",
+                                 !is.na(first) & is.na(second) & is.na(third) ~ "2024Stayed_lost",
+                                 is.na(first) & !is.na(second) & !is.na(third) ~ "2024Stayed",
+                                 is.na(first) & !is.na(second) == 1 & is.na(third) ~ "2024Disappeared",
+                                 is.na(first) & is.na(second) & !is.na(third) ~ "2024New")) |>
+      select(specialisation, status1:status3) |>
+      pivot_longer(cols = status1:status3, names_to = "survey", values_to = "status") |>
+      summarise(.by = c("specialisation", "status"), total = n()) |>
+      arrange(status)
+  ),
+  tar_target(
+    name = header_spe_map,
+    command = tibble(
+      col_keys = c("specialisation", "1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
+      level1   = c("Specialisation", "1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
+    )
+  ),
+  tar_target(
+    name = status_spe_survey_ft,
+    command = tibble(
+      "specialisation" = c("Specialists",
+                           rep("", 7),
+                           "Generalists",
+                           rep("", 7)),
+      "1972status" = c("Present",
+                       rep("", 6),
+                       "Total specialists",
+                       "Present",
+                       rep("", 6),
+                       "Total generalists"),
+      "1972total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "1972Present") |> pull(total),
+                      rep("", 6),
+                      status_spe_survey |> filter(specialisation == "alpine" & status == "1972Present") |> pull(total),
+                      status_spe_survey |> filter(specialisation == "generalist" & status == "1972Present") |> pull(total),
+                      rep("", 6),
+                      status_spe_survey |> filter(specialisation == "generalist" & status == "1972Present") |> pull(total)),
+      "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present",
+                          "Remained", "", "Lost", "", "New", "", "", "Total present"),
+      "2008/09total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "2009Remained") |> pull(total),
+                         "",
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2009Lost") |> pull(total),
+                         "",
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2009New") |> pull(total),
+                         "",
+                         "",
+                         (status_spe_survey |> filter(specialisation == "alpine" & status == "2009Remained") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2009New") |> pull(total)),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2009Remained") |> pull(total),
+                         "",
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2009Lost") |> pull(total),"
+                     ",
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2009New") |> pull(total),
+                         "",
+                         "",
+                         (status_spe_survey |> filter(specialisation == "generalist" & status == "2009Remained") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2009New") |> pull(total))),
+      "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present",
+                          "Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
+      "2024/25total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "2024Remained") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Lost") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Reappeared") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed_lost") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Disappeared") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024New") |> pull(total),
+                         (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Remained") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Reappeared") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2024New") |> pull(total)),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Remained") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Lost") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Reappeared") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed_lost") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Disappeared") |> pull(total),
+                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024New") |> pull(total),
+                         (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Remained") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Reappeared") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed") |> pull(total)) +
+                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2024New") |> pull(total)))
+    ) |>
+      flextable() |>
+      set_header_df(mapping = header_spe_map, key = "col_keys") |>
+      merge_h(part = "header") |>
+      bg(part = "header", bg = "black") |>
+      color(part = "header", color = "white") |>
+      bold(part = "header") |>
+      align(part = "header", j = 2:7, align = "center") |>
+      bg(part = "body", bg = "white") |>
+      color(part = "body", color = "black") |>
+      bg(part = "body", i = c(8, 16), bg = "grey") |>
+      hline(i = c(4, 12), j = 2:7) |>
+      hline(i = c(2, 10), j = 4:7) |>
+      hline(i = c(6, 14), j = 4:7) |>
+      border(i = 8, border.bottom = officer::fp_border(width = 2)) |>
+      border(i = c(1:6, 8, 9:14, 16), j = 4, border.left = officer::fp_border(color = "black")) |>
+      border(i = 1:16, j = c(2, 6), border.left = officer::fp_border(color = "black")) |>
+      border(part = "header", border.left = officer::fp_border(color = "white")) |>
+      vline_left() |>
+      vline_right() |>
+      align(part = "body", align = "left") |>
+      align(part = "body", j = c(3, 5, 7), align = "center") |>
+      flextable::font(part = "all", fontname = "Times New Roman") |>
+      autofit()
+  ),
   # Richness----
   tar_target(
     name = richness,
@@ -418,7 +613,7 @@ list(
       filter(type == "lost") |>
       left_join(summit_periods, by = c("summit", "period")) |>
       mutate(rate = value / time)
-  )
+  ),
   tar_target(
     name = lost_mod,
     command = glmmTMB(
@@ -481,7 +676,7 @@ list(
       filter(type == "lost") |>
       left_join(summit_periods, by = c("summit", "period")) |>
       mutate(rate = value / time)
-  )
+  ),
   tar_target(
     name = lost10_mod,
     command = glmmTMB(
