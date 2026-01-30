@@ -5,25 +5,23 @@ source("Scripts/0_setup.R")
 
 # Data----
 
-altitude_data_clean <- tar_read(elevation_data_clean) |> 
-  rename("functional" = "...3") |> 
-  relocate(c(specialisation, functional), .after = species)
+filefjell_data_clean <- tar_read(filefjell_data_clean)
 
-summit_periods <- altitude_data_clean |>
+summit_periods <- filefjell_data_clean |>
   select(year, summit) |>
   mutate(year = ifelse(year == 2025 & summit == "Storeknippa", 2024, year)) |> # For simplicity's sake, we assume the five species recorded in Storeknippa in 2025 were also there in 2024
-  distinct() |> 
+  distinct() |>
   pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
   mutate(first = y1972,
          second = coalesce(y2008, y2009),
          third = coalesce(y2024, y2025)) |>
   mutate(period1 = second - first,
-         period2 = third - second) |> 
-  select(summit, period1, period2) |> 
+         period2 = third - second) |>
+  select(summit, period1, period2) |>
   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "time")
 
-simplified_data <- altitude_data_clean |> 
-  select(!c(date:recorder, rareness)) |> 
+filefjell_simplified <- filefjell_data_clean |>
+  select(!c(date:recorder, rareness)) |>
   mutate(year = case_when(year == 1972 ~ "first",
                           year %in% c(2008, 2009) ~ "second",
                           year %in% c(2024, 2025) ~ "third"))
@@ -31,91 +29,38 @@ simplified_data <- altitude_data_clean |>
 
 ## Richness----
 
-richness <- simplified_data |> 
+richness <- filefjell_simplified |>
   summarise(.by = c(year, summit, specialisation), richness = n())
 
-richness_rate <- richness |> 
-  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |> 
+richness_rate <- richness |>
+  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
   mutate(period1 = second - first,
-         period2 = third - second) |> 
-  select(!c(first:third)) |> 
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |> 
-  left_join(summit_periods, by = c("summit", "period")) |> 
+         period2 = third - second) |>
+  select(!c(first:third)) |>
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+  left_join(summit_periods, by = c("summit", "period")) |>
   mutate(rate = change / time)
 
 
 # Only top 10 metres
 
-richness10 <- simplified_data |> 
-  filter(distance <= 10) |> 
+richness10 <- filefjell_simplified |>
+  filter(distance <= 10) |>
   summarise(.by = c(year, summit, specialisation), richness = n())
 
-richness10_rate <- richness10 |> 
-  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |> 
+richness10_rate <- richness10 |>
+  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
   mutate(period1 = second - first,
-         period2 = third - second) |> 
-  select(!c(first:third)) |> 
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |> 
-  left_join(summit_periods, by = c("summit", "period")) |> 
+         period2 = third - second) |>
+  select(!c(first:third)) |>
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+  left_join(summit_periods, by = c("summit", "period")) |>
   mutate(rate = change / time)
-
-
-# richness <- elevation_wide |> 
-#   pivot_longer(cols = first:third, names_to = "survey", values_to = "year") |> 
-#   mutate(presence = case_when(survey == "first" & !is.na(distance1) ~ 1,
-#                               survey == "first" & is.na(distance1) ~ 0,
-#                               survey == "second" & !is.na(distance2) ~ 1,
-#                               survey == "second" & is.na(distance2) ~ 0,
-#                               survey == "third" & !is.na(distance3) ~ 1,
-#                               survey == "third" & is.na(distance3) ~ 0)) |> 
-#   summarise(.by = c(summit, survey, year, specialisation, functional), richness = sum(presence))
-# 
-# richness_rate <- richness |> 
-#   summarise(.by = c(summit, year, specialisation), richness = sum(richness)) |> 
-#   pivot_wider(names_from = year, values_from = richness, names_prefix = "y") |> 
-#   mutate(change1 = ifelse(!is.na(y2008), y2008 - y1972, y2009 - y1972),
-#          period1 = ifelse(!is.na(y2008), 2008 - 1972, 2009 - 1972),
-#          change2 = case_when(!is.na(y2024) & !is.na(y2008) ~ y2024 - y2008,
-#                              !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009,
-#                              !is.na(y2025) & !is.na(y2008) ~ y2025 - y2008,
-#                              !is.na(y2025) & !is.na(y2009) ~ y2025 - y2009),
-#          period2 = case_when(!is.na(y2024) & !is.na(y2008) ~ 2024 - 2008,
-#                              !is.na(y2024) & !is.na(y2009) ~ 2024 - 2009,
-#                              !is.na(y2025) & !is.na(y2008) ~ 2025 - 2008,
-#                              !is.na(y2025) & !is.na(y2009) ~ 2025 - 2009)) |> 
-#   select(!c(y1972:y2025)) |> 
-#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
-#   mutate(period = as.factor(period),
-#          change = case_when(period == "period1" ~ change1,
-#                             period == "period2" ~ change2),
-#          rate = change / years) |> 
-#   select(!c(change1, change2))
-# 
-# richfun_rate <- richness |> 
-#   summarise(.by = c(summit, year, functional), richness = sum(richness)) |> 
-#   pivot_wider(names_from = year, values_from = richness, names_prefix = "y") |> 
-#   mutate(change1 = ifelse(!is.na(y2008), y2008 - y1972, y2009 - y1972),
-#          period1 = ifelse(!is.na(y2008), 2008 - 1972, 2009 - 1972),
-#          change2 = case_when(!is.na(y2024) & !is.na(y2008) ~ y2024 - y2008,
-#                              !is.na(y2024) & !is.na(y2009) ~ y2024 - y2009,
-#                              !is.na(y2025) & !is.na(y2008) ~ y2025 - y2008,
-#                              !is.na(y2025) & !is.na(y2009) ~ y2025 - y2009),
-#          period2 = case_when(!is.na(y2024) & !is.na(y2008) ~ 2024 - 2008,
-#                              !is.na(y2024) & !is.na(y2009) ~ 2024 - 2009,
-#                              !is.na(y2025) & !is.na(y2008) ~ 2025 - 2008,
-#                              !is.na(y2025) & !is.na(y2009) ~ 2025 - 2009)) |> 
-#   select(!c(y1972:y2025)) |> 
-#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |> 
-#   mutate(period = as.factor(period),
-#          change = case_when(period == "period1" ~ change1,
-#                             period == "period2" ~ change2),
-#          rate = change / years) |> 
-#   select(!c(change1, change2))
 
 
 ## Turnover----
 
-turnover <- simplified_data |> 
+turnover <- filefjell_simplified |> 
   pivot_wider(names_from = year, values_from = distance) |> 
   mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
          new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
@@ -200,7 +145,7 @@ lost_rate <- turnover |>
 
 ## 10 metres
 
-turnover10 <- simplified_data |> 
+turnover10 <- filefjell_simplified |> 
   filter(distance <= 10) |> 
   pivot_wider(names_from = year, values_from = distance) |> 
   mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
@@ -240,49 +185,30 @@ turnover_area_grouped <- turnover_area |>
             total = n())
 
 
-## Distance----
+## Altitude change----
 
 # Considering only species for which we have data (present two sampling times in a row)
 
-elevation_test <- simplified_data |> 
+altitude_rate <- filefjell_simplified |> 
   pivot_wider(names_from = year, values_from = distance) |> 
   mutate(period1 = (second - first) * (-1),
-         period2 = (third - second) * (-1)) # Change the sign so that a positive value indicates upwards movement
-  
-elerate_all <- elevation_wide |>
-  mutate(change1 = distance1 - distance2, 
-         change2 = distance2 - distance3) |> 
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  mutate(period = as.factor(period)) |>
-  mutate(change = case_when(period == "period1" ~ change1,
-                            period == "period2" ~ change2)) |>
+         period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
+  select(!c(first:third)) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |> 
   filter(!is.na(change)) |> 
-  mutate(rate = change / years)
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = change / time)
 
-
-# Considering only species found all years at a summit
-elerate_remained <- elevation_wide |>
-  mutate(change1 = distance1 - distance2, 
-         change2 = distance2 - distance3) |> 
-  filter(!is.na(change1) & !is.na(change2)) |>
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  mutate(period = as.factor(period)) |>
-  mutate(change = case_when(period == "period1" ~ change1,
-                            period == "period2" ~ change2)) |>
-  mutate(rate = change / years) |>
-  select(!c(change1, change2))
-
-# Considering also new species, giving them a conservative value of 33 metres below the top
-elerate_new <- elevation_wide_new |>
-  mutate(change1 = adj_dist1 - adj_dist2, 
-         change2 = adj_dist2 - distance3) |> 
-  filter(!is.na(change1) & !is.na(change2)) |>
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  mutate(period = as.factor(period)) |>
-  mutate(change = case_when(period == "period1" ~ change1,
-                            period == "period2" ~ change2)) |>
-  mutate(rate = change / years) |>
-  select(!c(change1, change2))
+altitude10_rate <- filefjell_simplified |> 
+  filter(distance <= 10) |> 
+  pivot_wider(names_from = year, values_from = distance) |> 
+  mutate(period1 = (second - first) * (-1),
+         period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
+  select(!c(first:third)) |> 
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |> 
+  filter(!is.na(change)) |> 
+  left_join(summit_periods, by = c("summit", "period")) |> 
+  mutate(rate = change / time)
 
 
 ## Nature type----
@@ -531,10 +457,10 @@ turnover_status |>
 
 ## Richness----
 
-## Whole top
+## Whole summit
 
 richness_rate |>
-  mutate(per_spe = paste0(period, specialisation)) |> 
+  mutate(per_spe = paste0(period, specialisation)) |>
   ggplot(aes(x = per_spe, y = rate)) +
   geom_violin() +
   labs(title = " elevations by Year",
@@ -542,7 +468,7 @@ richness_rate |>
        y = "Vertical elevation to Top (meters)") +
   theme_minimal()
 
-richness_rate |> 
+richness_rate |>
   ggplot() +
   geom_histogram(aes(x = rate))
 
@@ -567,7 +493,7 @@ richrate_modh |> model_diagnosis() # No problems
 richrate_modh |> model_homoscedasticity() # No problems
 richrate_modh |> summary()
 
-richrate_results <- richrate_modh |> 
+richrate_results <- richrate_modh |>
   mod_summary()
 richrate_results
 
@@ -595,48 +521,48 @@ richrate10_modh |> model_diagnosis() # No problems
 richrate10_modh |> model_homoscedasticity() # No problems
 richrate10_modh |> summary()
 
-richrate10_results <- richrate10_mod |> 
+richrate10_results <- richrate10_mod |>
   mod_summary()
 richrate10_results
 
 
 # ## Functional
-# 
+#
 # richfun_rate |>
-#   mutate(per_spe = paste0(period, functional)) |> 
+#   mutate(per_spe = paste0(period, functional)) |>
 #   ggplot(aes(x = per_spe, y = rate)) +
 #   geom_violin() +
 #   labs(title = " elevations by Year",
 #        x = "Year",
 #        y = "Vertical elevation to Top (meters)") +
 #   theme_minimal()
-# 
-# richfun_rate |> 
+#
+# richfun_rate |>
 #   ggplot() +
 #   geom_histogram(aes(x = rate))
-# 
+#
 # richfun_rate_mod <- glmmTMB(
 #   rate ~
 #     period * functional + (1 | summit),
 #   family = gaussian,
 #   data = richfun_rate)
-# 
+#
 # richfun_rate_mod |> model_diagnosis() # Uniformity, outliers and quantiles
 # richfun_rate_mod |> model_homoscedasticity() # period and functional
 # richfun_rate_mod |> summary()
-# 
+#
 # richfun_rate_modh <- glmmTMB(
 #   rate ~
 #     period * functional + (1 | summit),
 #   dispformula = ~period+functional,
 #   family = gaussian,
 #   data = richfun_rate)
-# 
+#
 # richfun_rate_modh |> model_diagnosis() # No problems
 # richfun_rate_modh |> model_homoscedasticity() # No problems
 # richfun_rate_modh |> summary()
-# 
-# richfun_rate_results <- richfun_rate_modh |> 
+#
+# richfun_rate_results <- richfun_rate_modh |>
 #   modfun_summary()
 # richfun_rate_results
 
@@ -711,23 +637,23 @@ lost_results
 
 
 
-## Elevation change - Only species we have data for----
+## Altitude change----
 
 #### Frequentist analysis
 
-elerate_all |> 
+altitude_rate |> 
   ggplot() +
   geom_histogram(aes(x = rate))
 
-elerate_all_mod <- glmmTMB(
+altrate_mod <- glmmTMB(
   rate ~ 
     period * specialisation + (1 | summit) + (1 | species), 
   family = gaussian, 
-  data = elerate_all)
+  data = altitude_rate)
 
-elerate_all_mod |> model_diagnosis()
-elerate_all_mod |> model_homoscedasticity()
-elerate_all_mod |> summary()
+altrate_mod |> model_diagnosis()
+altrate_mod |> model_homoscedasticity()
+altrate_mod |> summary()
 
 
 
@@ -746,28 +672,28 @@ priors_g1 <- c(
 
 ## Gaussian
 
-elerate_all_gmod1 <- brm(
+altrate_gbay1 <- brm(
   bf(rate ~
        period * specialisation + (1|summit) + (1|species)),
   family = gaussian(),
   prior = priors_g1,
   sample_prior = "only",
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 2000, seed = 811
 )
 
-elerate_all_expla1 <- crossing(
-  period = unique(elerate_all$period),
-  specialisation = unique(elerate_all$specialisation),
+altrate_expla1 <- crossing(
+  period = unique(altitude_rate$period),
+  specialisation = unique(altitude_rate$specialisation),
   summit = NA,
   species = NA
 )
 
-elerate_all_gpred1 <- elerate_all_gmod1 %>%
-  add_predicted_draws(newdata = elerate_all_expla1, re_formula = NA) %>%
+altrate_gpred1 <- altrate_gbay1 %>%
+  add_predicted_draws(newdata = altrate_expla1, re_formula = NA) %>%
   mutate(in_range = between(.prediction, -2, 2))
 
-elerate_all_gsumm1 <- elerate_all_gpred1 %>%
+altrate_gsumm1 <- altrate_gpred1 %>%
   group_by(period, specialisation) %>%
   summarise(
     p_in_range = mean(in_range),
@@ -777,8 +703,8 @@ elerate_all_gsumm1 <- elerate_all_gpred1 %>%
     .groups = "drop"
   )
 
-elerate_all_gsumm1
-# Between 97.2 and 98.3% of prior predictions fall within [-2, 2]. Good priors
+altrate_gsumm1
+# Between 97 and 99% of prior predictions fall within [-2, 2]. Good priors
 
 
 ## Student t
@@ -788,21 +714,21 @@ priors_t1 <- c(
   prior(gamma(2, 0.4), class = "nu")  # mean ~5, moderate heavy tails
 )
 
-elerate_all_tmod1 <- brm(
+altrate_tmod1 <- brm(
   bf(rate ~
        period * specialisation + (1|summit) + (1|species)),
   family = student(),
   prior = priors_t1,
   sample_prior = "only",
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 2000,  seed = 811
 )
 
-elerate_all_tpred1 <- elerate_all_tmod1 %>%
-  add_predicted_draws(newdata = elerate_all_expla1, re_formula = NA) %>%
+altrate_tpred1 <- altrate_tmod1 %>%
+  add_predicted_draws(newdata = altrate_expla1, re_formula = NA) %>%
   mutate(in_range = between(.prediction, -2, 2))
 
-elerate_all_tsumm1 <- elerate_all_tpred1 %>%
+altrate_tsumm1 <- altrate_tpred1 %>%
   group_by(period, specialisation) %>%
   summarise(
     p_in_range = mean(in_range),
@@ -812,23 +738,23 @@ elerate_all_tsumm1 <- elerate_all_tpred1 %>%
     .groups = "drop"
   )
 
-elerate_all_tsumm1
+altrate_tsumm1
 
 
 ### 2. Comparing gaussian and student t
 
-elerate_all_gmod2 <- brm(
+altrate_gmod2 <- brm(
   bf(rate ~ 
        period * specialisation + (1|summit) + (1|species)),
   family = gaussian(),
   prior = priors_g1,
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 4000, seed = 811,
   control = list(adapt_delta = 0.95)
 )
 
 # Student-t, sigma constant
-elerate_all_tmod2 <- brm(
+altrate_tmod2 <- brm(
   bf(rate ~ 
        period * specialisation + (1|summit) + (1|species)),
   family = student(),
@@ -839,41 +765,41 @@ elerate_all_tmod2 <- brm(
 )
 
 
-elerate_all_gloo2 <- loo(elerate_all_gmod2, save_psis = TRUE)  # PSIS-LOO
-elerate_all_tloo2 <- loo(elerate_all_tmod2, save_psis = TRUE)
+altrate_gloo2 <- loo(altrate_gmod2, save_psis = TRUE)  # PSIS-LOO
+altrate_tloo2 <- loo(altrate_tmod2, save_psis = TRUE)
 
 # Side-by-side comparison
-loo_compare(elerate_all_gloo2, elerate_all_tloo2)
+loo_compare(altrate_gloo2, altrate_tloo2)
 
-table(cut(elerate_all_gloo2$diagnostics$pareto_k, c(-Inf, 0.5, 0.7, 1, Inf)))
-table(cut(elerate_all_tloo2$diagnostics$pareto_k, c(-Inf, 0.5, 0.7, 1, Inf)))
+table(cut(altrate_gloo2$diagnostics$pareto_k, c(-Inf, 0.5, 0.7, 1, Inf)))
+table(cut(altrate_tloo2$diagnostics$pareto_k, c(-Inf, 0.5, 0.7, 1, Inf)))
 
-pp_check(elerate_all_gmod2, type = "ecdf_overlay_grouped", group = "period")
-pp_check(elerate_all_tmod2, type = "ecdf_overlay_grouped", group = "period")
-pp_check(elerate_all_gmod2, type = "dens_overlay_grouped", group = "period")
-pp_check(elerate_all_tmod2, type = "dens_overlay_grouped", group = "period")
+pp_check(altrate_gmod2, type = "ecdf_overlay_grouped", group = "period")
+pp_check(altrate_tmod2, type = "ecdf_overlay_grouped", group = "period")
+pp_check(altrate_gmod2, type = "dens_overlay_grouped", group = "period")
+pp_check(altrate_tmod2, type = "dens_overlay_grouped", group = "period")
 
-elerate_all_rates <- elerate_all$rate
-elerate_all_grates2 <- posterior_predict(elerate_all_gmod2, draws = 1000)
-elerate_all_trates2 <- posterior_predict(elerate_all_tmod2, draws = 1000)
+altrate_rates <- altitude_rate$rate
+altrate_grates2 <- posterior_predict(altrate_gmod2, draws = 1000)
+altrate_trates2 <- posterior_predict(altrate_tmod2, draws = 1000)
 
-ppc_loo_pit_qq(elerate_all_rates, elerate_all_grates2, psis_object = elerate_all_gloo2$psis_object)
-ppc_loo_pit_qq(elerate_all_rates, elerate_all_trates2, psis_object = elerate_all_tloo2$psis_object)
+ppc_loo_pit_qq(altrate_rates, altrate_grates2, psis_object = altrate_gloo2$psis_object)
+ppc_loo_pit_qq(altrate_rates, altrate_trates2, psis_object = altrate_tloo2$psis_object)
 
 # nu
 
-elerate_all_draws2 <- as_draws_df(elerate_all_tmod2)
-elerate_all_nu2 <- elerate_all_draws2 %>%
+altrate_draws2 <- as_draws_df(altrate_tmod2)
+altrate_nu2 <- altrate_draws2 %>%
   summarise(
     nu_mean = mean(nu),
     nu_median = median(nu),
     nu_q05 = quantile(nu, 0.05),
     nu_q95 = quantile(nu, 0.95)
   )
-elerate_all_nu2
+altrate_nu2
 
 # We have an extremely low nu. We explore what this means
-# i.e.: is there actually such heavy tails, or is it indicative of missing variance structure?
+# i.e.: are there actually such heavy tails, or is it indicative of missing variance structure?
 
 ### 3.Seeing whether there's heteroskedasticity, and if the extreme nu can be caused by it
 
@@ -890,89 +816,89 @@ priors_t3 <- c(
 )
 # For sigma, I tried 0.5 for intercept and 0.3 for b (instead of 0.3 and 0.2), but it resulted in one -inf value, and the brm function stopped
 
-elerate_all_tmod3per <- brm(
+altrate_tmod3per <- brm(
   bf(rate ~ 
        period * specialisation + (1|summit) + (1|species),
      sigma ~ period),
   family = student(),
   prior = priors_t3,
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 4000, seed = 811,
   control = list(adapt_delta = 0.95)
 )
 
-elerate_all_tmod3spe <- brm(
+altrate_tmod3spe <- brm(
   bf(rate ~ 
        period * specialisation + (1|summit) + (1|species),
      sigma ~ specialisation),
   family = student(),
   prior = priors_t3,
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 4000, seed = 811,
   control = list(adapt_delta = 0.95)
 )
 
-elerate_all_tmod3perspe <- brm(
+altrate_tmod3perspe <- brm(
   bf(rate ~ 
        period * specialisation + (1|summit) + (1|species),
      sigma ~ period + specialisation),
   family = student(),
   prior = priors_t3,
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 4000, seed = 811,
   control = list(adapt_delta = 0.95)
 )
 
-elerate_all_tmod3perspeplus <- brm(
+altrate_tmod3perxspe <- brm(
   bf(rate ~ 
        period * specialisation + (1|summit) + (1|species),
      sigma ~ period * specialisation),
   family = student(),
   prior = priors_t3,
-  data = elerate_all,
+  data = altitude_rate,
   chains = 4, iter = 4000, seed = 811,
   control = list(adapt_delta = 0.95)
 )
 
-loo_compare(loo(elerate_all_tmod2), 
-            loo(elerate_all_tmod3per), 
-            loo(elerate_all_tmod3spe), 
-            loo(elerate_all_tmod3perspe),
-            loo(elerate_all_tmod3perspeplus))
-posterior_summary(elerate_all_tmod2, variable = "nu")
-posterior_summary(elerate_all_tmod3per, variable = "nu")
-posterior_summary(elerate_all_tmod3spe, variable = "nu")
-posterior_summary(elerate_all_tmod3perspe, variable = "nu")
-posterior_summary(elerate_all_tmod3perspeplus, variable = "nu")
+loo_compare(loo(altrate_tmod2), 
+            loo(altrate_tmod3per), 
+            loo(altrate_tmod3spe), 
+            loo(altrate_tmod3perspe),
+            loo(altrate_tmod3perxspe))
+posterior_summary(altrate_tmod2, variable = "nu")
+posterior_summary(altrate_tmod3per, variable = "nu")
+posterior_summary(altrate_tmod3spe, variable = "nu")
+posterior_summary(altrate_tmod3perspe, variable = "nu")
+posterior_summary(altrate_tmod3perxspe, variable = "nu")
 # We keep the per model. period improves drastically the fit, and increases nu. specialisation does not do it. The additive and interactive models are slightly better, but the improvement is within 1 SD. So they add complexity without improving the results notably
 
 
 
 ### 4. Model validation
 
-elerate_all_tmod3per |> summary()
+altrate_tmod3per |> summary()
 # Rhat = 1.00 for all parameters
 # Bulk and Tail Effective sample size > 1000 for all parameters
 # No divergences
 
-pp_check(elerate_all_tmod3per, type="dens_overlay_grouped", group="period")
-pp_check(elerate_all_tmod3per, type="ecdf_overlay_grouped", group="period")
+pp_check(altrate_tmod3per, type="dens_overlay_grouped", group="period")
+pp_check(altrate_tmod3per, type="ecdf_overlay_grouped", group="period")
 
 
-elerate_all_t3per_rates <- elerate_all$rate
-elerate_all_t3per_pred <- posterior_predict(elerate_all_tmod3per, draws = 1000)
-elerate_all_t3per_loo <- loo(elerate_all_tmod3per, save_psis = TRUE)
+altrate_t3per_rates <- altitude_rate$rate
+altrate_t3per_pred <- posterior_predict(altrate_tmod3per, draws = 1000)
+altrate_t3per_loo <- loo(altrate_tmod3per, save_psis = TRUE)
 
-ppc_loo_pit_qq(elerate_all_t3per_rates, 
-               elerate_all_t3per_pred, 
-               psis_object = elerate_all_t3per_loo$psis_object)
+ppc_loo_pit_qq(altrate_t3per_rates, 
+               altrate_t3per_pred, 
+               psis_object = altrate_t3per_loo$psis_object)
 # The model slightly overestimates tail heaviness, but is well-calibrated for the central mass
 
 
 ### 5. Interpret model parameters
 
 # Alpine species did not move systematically in any of the periods. Generalists moved slightly more than specialists in the first period, but not in the second
-# There have been more heterogeneity in elevational movement in the second period than in the first - Period explains an increase in variability
+# There has been more heterogeneity in alitudinal movement in the second period than in the first - Period explains an increase in variability
 
 # While mean elevational movement remains near zero for both sampling periods, residual variation increased more than threefold in the second period, indicating that species responses have become substantially more heterogeneous under recent climatic conditions.
 
@@ -980,15 +906,15 @@ ppc_loo_pit_qq(elerate_all_t3per_rates,
 
 # Most species show modest movement, but a few exhibit surprisingly large shifts
 
-elerate_all_t3per_r2 <- r2_bayes(elerate_all_tmod3per)
-elerate_all_t3per_r2 # Neither the fixed effects or the random effects explain much
+altrate_t3per_r2 <- r2_bayes(altrate_tmod3per)
+altrate_t3per_r2 # Neither the fixed effects or the random effects explain much
 
 
 ### 6. Post hoc
 
-elerate_all_results <- elerate_all_tmod3per |> 
+altrate_results <- altrate_tmod3per |> 
   mod_summary()
-elerate_all_results
+altrate_results
 # Post-hoc analyses of mean elevational change
 
 
@@ -1700,6 +1626,31 @@ elerate_all_results <- elerate_all_bayesh |>
 
 
 ## Elevation change. Only species present all years----
+
+
+# Considering only species found all years at a summit
+elerate_remained <- elevation_wide |>
+  mutate(change1 = distance1 - distance2, 
+         change2 = distance2 - distance3) |> 
+  filter(!is.na(change1) & !is.na(change2)) |>
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  mutate(period = as.factor(period)) |>
+  mutate(change = case_when(period == "period1" ~ change1,
+                            period == "period2" ~ change2)) |>
+  mutate(rate = change / years) |>
+  select(!c(change1, change2))
+
+# Considering also new species, giving them a conservative value of 33 metres below the top
+elerate_new <- elevation_wide_new |>
+  mutate(change1 = adj_dist1 - adj_dist2, 
+         change2 = adj_dist2 - distance3) |> 
+  filter(!is.na(change1) & !is.na(change2)) |>
+  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+  mutate(period = as.factor(period)) |>
+  mutate(change = case_when(period == "period1" ~ change1,
+                            period == "period2" ~ change2)) |>
+  mutate(rate = change / years) |>
+  select(!c(change1, change2))
 
 elerate_rem_bayesh <- brm(
   bf(rate ~
