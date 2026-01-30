@@ -285,19 +285,93 @@ list(
       relocate(habitat_decare, .after = percentage) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
       arrange(summit, year, species)
+  ),
+  # General datasets----
+  tar_target(
+    name = summit_periods,
+    command = filefjell_data_clean |>
+      select(year, summit) |>
+      mutate(year = ifelse(year == 2025 & summit == "Storeknippa", 2024, year)) |> # For simplicity's sake, we assume the five species recorded in Storeknippa in 2025 were also there in 2024
+      distinct() |>
+      pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
+      mutate(first = y1972,
+             second = coalesce(y2008, y2009),
+             third = coalesce(y2024, y2025)) |>
+      mutate(period1 = second - first,
+             period2 = third - second) |>
+      select(summit, period1, period2) |>
+      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "time")
+  ),
+  tar_target(
+    name = filefjell_simplified,
+    command = filefjell_data_clean |>
+      select(!c(date:recorder, rareness)) |>
+      mutate(year = case_when(year == 1972 ~ "first",
+                              year %in% c(2008, 2009) ~ "second",
+                              year %in% c(2024, 2025) ~ "third"))
+  ),
+  # Richness----
+  tar_target(
+    name = richness,
+    command = filefjell_simplified |>
+      summarise(.by = c(year, summit, specialisation), richness = n())
+  ),
+  tar_target(
+    name = richness_rate,
+    command = richness |>
+      pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
+      mutate(period1 = second - first,
+             period2 = third - second) |>
+      select(!c(first:third)) |>
+      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = change / time)
+  ),
+  tar_target(
+    name = richrate_mod,
+    command = glmmTMB(
+      rate ~
+        period * specialisation + (1 | summit),
+      dispformula = ~period,
+      family = gaussian,
+      data = richness_rate)
+  ),
+  tar_target(
+    name = richrate_results,
+    command = richrate_mod |>
+      mod_summary()
+  ),
+  tar_target(
+    name = richness10,
+    command = filefjell_simplified |>
+      filter(distance <= 10) |>
+      summarise(.by = c(year, summit, specialisation), richness = n())
+  ),
+  tar_target(
+    name = richness10_rate,
+    command = richness10 |>
+      pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
+      mutate(period1 = second - first,
+             period2 = third - second) |>
+      select(!c(first:third)) |>
+      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = change / time)
+  ),
+  tar_target(
+    name = richrate10_mod,
+    command = glmmTMB(
+      rate ~
+        period * specialisation + (1 | summit),
+      dispformula = ~period,
+      family = gaussian,
+      data = richness10_rate)
+  ),
+  tar_target(
+    name = richrate10_results,
+    command = richrate10_mod |>
+      mod_summary()
   )
-  # # General datasets----
-  # tar_target(
-  #   name = visit_years,
-  #   command = elevation_data_clean |>
-  #     select(year, summit) |>
-  #     distinct() |>
-  #     pivot_wider(names_from = year, names_prefix = "y", values_from = year) |>
-  #     mutate(first = 1972,
-  #            second = coalesce(y2008, y2009),
-  #            third = coalesce(y2024, y2025)) |>
-  #     select(summit, first, second, third)
-  # ),
   # tar_target(
   #   name = elevation_wide,
   #   command = elevation_data_clean |>
@@ -438,26 +512,6 @@ list(
   # tar_target(
   #   name = turlost_results,
   #   command = turlost_mod |>
-  #     mod_summary()
-  # ),
-  # # Richness----
-  # tar_target(
-  #   name = richness_rate,
-  #   command = turnover_species |>
-  #     summarise(.by = c(summit, elevation, period, specialisation), rate = sum(rate))
-  # ),
-  # tar_target(
-  #   name = richrate_mod,
-  #   command = glmmTMB(
-  #     rate ~
-  #       period * specialisation + (1 | summit),
-  #     dispformula = ~period,
-  #     family = gaussian,
-  #     data = richness_rate)
-  # ),
-  # tar_target(
-  #   name = richrate_results,
-  #   command = richrate_mod |>
   #     mod_summary()
   # ),
   # # Elevation----
