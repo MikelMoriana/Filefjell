@@ -39,7 +39,7 @@ data_tidying <- function(data) {
   data %>%
     clean_names() %>%
     relocate(year) %>% 
-    rename(any_of(c(summit = "top", elevation = "height", elevation = "top_height", weather = "vaer"))) %>%
+    rename(any_of(c(summit = "top", weather = "vaer"))) %>%
     mutate(summit = str_replace_all(summit, " ", "_"),
            across(any_of("date"), ~ dmy(.x)),
            across(any_of("weather"), ~ str_replace_all(.x, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))),
@@ -83,14 +83,14 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
   return(plot)
 }
 
-adj_label <- c(new = "<b>a)</b> New<br><span style='color:transparent'>b) </span>species", 
-               lost = "<b>b)</b> Lost<br><span style='color:transparent'>c) </span>species", 
-               richness = "<b>c)</b> Species<br><span style='color:transparent'>a) </span>richness", 
-               elevation = "<b>d)</b> Species<br><span style='color:transparent'>d) </span>altitude",
-               alpine = "Alpine",
+adj_label <- c(richness = "Species<br>richness", 
+               new = "New<br>species", 
+               lost = "Lost<br>species", 
+               elevation = "Uppermost<br>occurrence",
+               alpine = "Specialist",
                generalist = "Generalist",
-               period1 = "1972-2009",
-               period2 = "2009-2024",
+               period1 = "1972–2008/09",
+               period2 = "2008/09–2024/25",
                T1 = "Bare rock",
                T3 = "Mountain heath,\nleeside and tundra",
                T7 = "Snowbed",
@@ -236,10 +236,6 @@ mod_types <- function(mod) {
   model_df <- mod %>%
     tidy(effects = "fixed", conf.int = TRUE) %>%
     select(!c(effect, component)) %>%
-    filter(!grepl("sigma", term)) %>%
-    mutate(statistic = if (!"statistic" %in% names(.)) NA_real_ else statistic,
-           p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
-    relocate(c(statistic, p.value), .after = std.error) %>%
     rename(Term = term, Estimate = estimate, SE = std.error, Statistic = statistic, p_value = p.value, CI_lower = conf.low, CI_upper = conf.high) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
@@ -247,48 +243,43 @@ mod_types <- function(mod) {
     format_ft() %>%
     bold(i = ~ ((CI_lower * CI_upper) > 0)) %>%
     align(part = "all", j = -1, align = "center") %>%
-    hline(i = 1)
+    hline(i = c(1, 9))
   
   ## Emmeans
   reference <- ref_grid(mod,
                         at = list(habitat_decare = std_area))
-  emmeans <- reference |> 
-    emmeans(~ main_type, type = "response")
+  emmeans <- reference |>
+    emmeans(~ main_type * specialisation, type = "response")
   # Arrange as dataframe
   emmeans_df <- emmeans %>%
     tidy(conf.int = TRUE) %>%
-    mutate(main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7"))) %>%
-    mutate(std.error = if (!"std.error" %in% names(.)) NA_real_  else std.error,
-           p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
-    relocate(std.error, .after = response) %>%
-    rename(Habitat = main_type, Estimate = response, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    mutate(main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7", "V"))) %>%
+    rename(Habitat = main_type, Estimate = response, SE = std.error, CI_lower = conf.low, CI_upper = conf.high, p_value = p.value) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
   emmeans_ft <-  emmeans_df %>%
     format_ft() %>%
-    bold(i = ~ (((CI_lower * CI_upper) < CI_lower) | ((CI_lower * CI_upper) > CI_upper))) %>%
+    bold(i = ~ p_value < 0.05) %>%
     align(part = "all", j = 2:7, align = "center") %>%
+    hline(i = 7) %>%
     vline(j = 1)
 
   ## Contrasts
-  contrast <- emmeans %>%
-    contrast(method = "pairwise", adjust = "tukey")
+  contrast_spe <- emmeans %>%
+    contrast(method = "pairwise", by ="specialisation", adjust = "tukey")
   # Make into a dataframe with the desired output
-  contrast_df <- contrast %>%
+  contrast_spe_df <- contrast_spe %>%
     tidy(conf.int = TRUE) %>%
     select(!c(term, null.value, df, null)) %>%
-    mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
-           p.value = if (!"adj.p.value" %in% names(.)) NA_real_ else adj.p.value) %>%
-    select(!adj.p.value) %>%
-    relocate(c(std.error, statistic), .after = ratio) %>%
-    rename(Contrast = contrast, Ratio = ratio, SE = std.error, Statistic = statistic, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    rename(Specialisation = specialisation, Contrast = contrast, Ratio = ratio, SE = std.error, Statistic = statistic, CI_lower = conf.low, CI_upper = conf.high, p_value = adj.p.value) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
-  contrast_ft <-  contrast_df %>%
+  contrast_spe_ft <-  contrast_spe_df %>%
     format_ft() %>%
-    bold(i = ~ (((CI_lower * CI_upper) < CI_lower) | ((CI_lower * CI_upper) > CI_upper))) %>%
+    bold(i = ~ p_value < 0.05) %>%
     align(part = "all", j = 2:6, align = "center") %>%
-    hline(i = c(5, 9, 12, 14, 15)) %>%
+    hline(i = c(6, 11, 15, 18, 20, 27, 32, 36, 39, 41)) %>%
+    hline(i = 21, border = officer::fp_border(style = "thick")) %>%
     vline(j = 1)
 
   return(list(
@@ -296,10 +287,9 @@ mod_types <- function(mod) {
     emmeans = emmeans,
     emmeans_df = emmeans_df,
     emmeans_ft = emmeans_ft,
-    emmeans_figure = emmeans_figure,
-    contrast = contrast,
-    contrast_df = contrast_df,
-    contrast_ft = contrast_ft))
+    contrast_spe = contrast_spe,
+    contrast_spe_df = contrast_spe_df,
+    contrast_spe_ft = contrast_spe_ft))
 }
 
 # Model fitness----
