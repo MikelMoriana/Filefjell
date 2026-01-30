@@ -371,49 +371,131 @@ list(
     name = richrate10_results,
     command = richrate10_mod |>
       mod_summary()
+  ),
+  # Turnover----
+  tar_target(
+    name = turnover,
+    command = filefjell_simplified |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
+             new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
+             lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
+             lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |>
+      select(!c(first:third)) |>
+      summarise(.by = c(summit, specialisation),
+                newperiod1 = sum(new1),
+                newperiod2 = sum(new2),
+                lostperiod1 = sum(lost1),
+                lostperiod2 = sum(lost2)) |>
+      pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2),
+                   names_to = c("type", "period"),
+                   names_pattern = "^(new|lost)(period\\d+)$",
+                   values_to = "value")
+  ),
+  tar_target(
+    name = new_rate,
+    command = turnover |>
+      filter(type == "new") |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = value / time)
+  ),
+  tar_target(
+    name = new_mod,
+    command = glmmTMB(
+      rate ~
+        period * specialisation + (1 | summit),
+      family = gaussian,
+      data = new_rate)
+  ),
+  tar_target(
+    name = new_results,
+    command = new_mod |>
+      mod_summary()
+  ),
+  tar_target(
+    name = lost_rate,
+    command = turnover |>
+      filter(type == "lost") |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = value / time)
   )
-  # tar_target(
-  #   name = elevation_wide,
-  #   command = elevation_data_clean |>
-  #     select(!c(date:recorder, rareness)) |>
-  #     pivot_wider(names_from = year, names_prefix = "y", values_from = distance) |>
-  #     left_join(visit_years, by = "summit") |>
-  #     mutate(third = ifelse(!is.na(y2025), 2025, third),
-  #            distance1 = y1972,
-  #            distance2 = coalesce(y2008, y2009),
-  #            distance3 = coalesce(y2024, y2025)) |>
-  #     select(!c(y1972, y2008, y2009, y2024, y2025)) |>
-  #     mutate(period1 = second - first,
-  #            period2 = third - second)
-  # ),
-  # tar_target(
-  #   name = turnover_species,
-  #   command = elevation_wide |>
-  #     select(!first:third) |>
-  #     mutate(presence1 = ifelse(is.na(distance1), 0, 1),
-  #            presence2 = ifelse(is.na(distance2), 0, 1),
-  #            presence3 = ifelse(is.na(distance3), 0, 1),
-  #            turnover1 = presence2 - presence1,
-  #            turnover2 = presence3 - presence2,
-  #            development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
-  #                                    turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
-  #                                    turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
-  #                                    turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
-  #                                    turnover1 == 0 & turnover2 == 0 ~ "Remained",
-  #                                    turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
-  #                                    turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
-  #                                    turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
-  #                                    turnover1 == -1 & turnover2 == -1 ~ "Error")) |>
-  #     select(!distance1:distance3) |>
-  #     relocate(development, .after = species) |>
-  #     mutate(rate1 = turnover1 / period1,
-  #            rate2 = turnover2 / period2) |>
-  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  #     mutate(rate = ifelse(period == "period1", rate1, rate2)) |>
-  #     relocate(period:rate, .after = development) |>
-  #     mutate(period = as.factor(period))
-  # ),
-  # # Turnover----
+  tar_target(
+    name = lost_mod,
+    command = glmmTMB(
+      rate ~
+        period * specialisation + (1 | summit),
+      dispformula = ~period,
+      family = gaussian,
+      data = lost_rate)
+  ),
+  tar_target(
+    name = lost_results,
+    command = lost_mod |>
+      mod_summary()
+  ),
+  # Turnover 10m----
+  tar_target(
+    name = turnover10,
+    command = filefjell_simplified |>
+      filter(distance <= 10) |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
+             new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
+             lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
+             lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |>
+      select(!c(first:third)) |>
+      summarise(.by = c(summit, specialisation),
+                newperiod1 = sum(new1),
+                newperiod2 = sum(new2),
+                lostperiod1 = sum(lost1),
+                lostperiod2 = sum(lost2)) |>
+      pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2),
+                   names_to = c("type", "period"),
+                   names_pattern = "^(new|lost)(period\\d+)$",
+                   values_to = "value")
+  ),
+  tar_target(
+    name = new10_rate,
+    command = turnover10 |>
+      filter(type == "new") |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = value / time)
+  ),
+  tar_target(
+    name = new10_mod,
+    command = glmmTMB(
+      rate ~
+        period * specialisation + (1 | summit),
+      dispformula = ~period,
+      family = gaussian,
+      data = new10_rate)
+  ),
+  tar_target(
+    name = new10_results,
+    command = new10_mod |>
+      mod_summary()
+  ),
+  tar_target(
+    name = lost10_rate,
+    command = turnover10 |>
+      filter(type == "lost") |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = value / time)
+  )
+  tar_target(
+    name = lost10_mod,
+    command = glmmTMB(
+      rate ~
+        period * specialisation + (1 | summit),
+      dispformula = ~period,
+      family = gaussian,
+      data = lost10_rate)
+  ),
+  tar_target(
+    name = lost10_results,
+    command = lost10_mod |>
+      mod_summary()
+  )
   # tar_target(
   #   name = turnover_grouped,
   #   command = turnover_species |> 
@@ -478,41 +560,6 @@ list(
   #     align(part = "body", i = 3:10, j = 2, align = "left") |> 
   #     flextable::font(part = "all", fontname = "Times New Roman") |> 
   #     autofit()
-  # ),
-  # tar_target(
-  #   name = turnover_summit,
-  #   command = turnover_species |>
-  #     summarise(.by = c(summit, period, specialisation),
-  #               new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE),
-  #               nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE),
-  #               lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
-  # ),
-  # tar_target(
-  #   name = turnew_mod,
-  #   command = glmmTMB(
-  #     new ~
-  #       period * specialisation + (1 | summit),
-  #     family = gaussian,
-  #     data = turnover_summit)
-  # ),
-  # tar_target(
-  #   name = turnew_results,
-  #   command = turnew_mod |>
-  #     mod_summary()
-  # ),
-  # tar_target(
-  #   name = turlost_mod,
-  #   command = glmmTMB(
-  #     lost ~
-  #       period * specialisation + (1 | summit),
-  #     dispformula = ~period*specialisation,
-  #     family = gaussian,
-  #     data = turnover_summit)
-  # ),
-  # tar_target(
-  #   name = turlost_results,
-  #   command = turlost_mod |>
-  #     mod_summary()
   # ),
   # # Elevation----
   # tar_target(
