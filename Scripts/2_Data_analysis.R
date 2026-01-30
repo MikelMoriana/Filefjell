@@ -27,6 +27,7 @@ filefjell_simplified <- filefjell_data_clean |>
                           year %in% c(2024, 2025) ~ "third"))
 
 
+
 ## Richness----
 
 richness <- filefjell_simplified |>
@@ -60,118 +61,64 @@ richness10_rate <- richness10 |>
 
 ## Turnover----
 
-turnover <- filefjell_simplified |> 
-  pivot_wider(names_from = year, values_from = distance) |> 
+turnover <- filefjell_simplified |>
+  pivot_wider(names_from = year, values_from = distance) |>
   mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
          new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
          lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
-         lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |> 
-  select(!c(first:third)) |> 
-  summarise(.by = c(summit, specialisation), 
-            newperiod1 = sum(new1), 
+         lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |>
+  select(!c(first:third)) |>
+  summarise(.by = c(summit, specialisation),
+            newperiod1 = sum(new1),
             newperiod2 = sum(new2),
             lostperiod1 = sum(lost1),
-            lostperiod2 = sum(lost2)) |> 
-  pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2), 
-               names_to = c("type", "period"), 
+            lostperiod2 = sum(lost2)) |>
+  pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2),
+               names_to = c("type", "period"),
                names_pattern = "^(new|lost)(period\\d+)$",
                values_to = "value")
 
-new_rate <- turnover |> 
-  filter(type == "new") |> 
-  left_join(summit_periods, by = c("summit", "period")) |> 
+new_rate <- turnover |>
+  filter(type == "new") |>
+  left_join(summit_periods, by = c("summit", "period")) |>
   mutate(rate = value / time)
 
-lost_rate <- turnover |> 
-  filter(type == "lost") |> 
-  left_join(summit_periods, by = c("summit", "period")) |> 
+lost_rate <- turnover |>
+  filter(type == "lost") |>
+  left_join(summit_periods, by = c("summit", "period")) |>
   mutate(rate = value / time)
-
-# turnover_species <- elevation_wide |>
-#   select(!first:third) |>
-#   mutate(presence1 = ifelse(is.na(distance1), 0, 1),
-#          presence2 = ifelse(is.na(distance2), 0, 1),
-#          presence3 = ifelse(is.na(distance3), 0, 1),
-#          turnover1 = presence2 - presence1,
-#          turnover2 = presence3 - presence2,
-#          development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
-#                                  turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
-#                                  turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
-#                                  turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
-#                                  turnover1 == 0 & turnover2 == 0 ~ "Remained",
-#                                  turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
-#                                  turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
-#                                  turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
-#                                  turnover1 == -1 & turnover2 == -1 ~ "Error")) |>
-#   select(!distance1:distance3) |> 
-#   relocate(development, .after = species) |>
-#   mutate(rate1 = turnover1 / period1,
-#          rate2 = turnover2 / period2) |>
-#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-#   mutate(rate = ifelse(period == "period1", rate1, rate2)) |>
-#   relocate(period:rate, .after = development) |>
-#   mutate(period = as.factor(period))
-# 
-# turnover_grouped <- turnover_species |> 
-#   summarise(.by = c("specialisation", "development"), total = n() / 2) |> # Divide by two since for each species we have two rows, one per period
-#   arrange(development, specialisation)
-# 
-# turnover_bydevelopment <- turnover_species |> 
-#   summarise(.by = c("development"), total = n() / 2) # Divide by two since for each species we have two rows, one per period
-# 
-# 
-# # By summit
-# 
-# turnover_summit <- turnover_species |> 
-#   summarise(.by = c(summit, period, specialisation), 
-#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
-# 
-# turnover_summit_tourist <- turnover_species |> 
-#   filter(development %in% c("Forth_back", "Back_forth")) |> 
-#   summarise(.by = c(summit, period), 
-#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
-# 
-# turnover_summit_nontourist <- turnover_species |> 
-#   filter(!(development %in% c("Forth_back", "Back_forth"))) |> 
-#   summarise(.by = c(summit, period), 
-#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE), 
-#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE), 
-#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
 
 
 ## 10 metres
 
-turnover10 <- filefjell_simplified |> 
-  filter(distance <= 10) |> 
-  pivot_wider(names_from = year, values_from = distance) |> 
+turnover10 <- filefjell_simplified |>
+  filter(distance <= 10) |>
+  pivot_wider(names_from = year, values_from = distance) |>
   mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
          new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
          lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
-         lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |> 
-  select(!c(first:third)) |> 
-  summarise(.by = c(summit, specialisation), 
-            newperiod1 = sum(new1), 
+         lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |>
+  select(!c(first:third)) |>
+  summarise(.by = c(summit, specialisation),
+            newperiod1 = sum(new1),
             newperiod2 = sum(new2),
             lostperiod1 = sum(lost1),
-            lostperiod2 = sum(lost2)) |> 
-  pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2), 
-               names_to = c("type", "period"), 
+            lostperiod2 = sum(lost2)) |>
+  pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2),
+               names_to = c("type", "period"),
                names_pattern = "^(new|lost)(period\\d+)$",
                values_to = "value")
 
-new10_rate <- turnover10 |> 
-  filter(type == "new") |> 
-  left_join(summit_periods, by = c("summit", "period")) |> 
+new10_rate <- turnover10 |>
+  filter(type == "new") |>
+  left_join(summit_periods, by = c("summit", "period")) |>
   mutate(rate = value / time)
 
-lost10_rate <- turnover10 |> 
-  filter(type == "lost") |> 
-  left_join(summit_periods, by = c("summit", "period")) |> 
+lost10_rate <- turnover10 |>
+  filter(type == "lost") |>
+  left_join(summit_periods, by = c("summit", "period")) |>
   mutate(rate = value / time)
+
 
 
 ## New species by area----
@@ -183,6 +130,7 @@ turnover_area <- turnover_species |>
 turnover_area_grouped <- turnover_area |> 
   summarise(.by = c(elevation, summit_decare, bedrock, development), 
             total = n())
+
 
 
 ## Altitude change----
@@ -574,7 +522,7 @@ new_rate |>
   ggplot(aes(x = period, y = rate)) +
   geom_violin()
 
-new_rate |> 
+new_rate |>
   ggplot() +
   geom_histogram(aes(x = rate))
 
@@ -583,7 +531,6 @@ new_mod <- glmmTMB(
     period * specialisation + (1 | summit),
   family = gaussian,
   data = new_rate)
-# turnew_mod <- tar_read(turnew_mod) # To double-check targets
 
 new_mod |> model_diagnosis() # No problems
 new_mod |> model_homoscedasticity() # No problems
@@ -593,6 +540,45 @@ new_mod |> summary()
 new_results <- new_mod |>
   mod_summary()
 new_results
+
+
+## Top 10 metres
+
+new10_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin()
+
+new10_rate |>
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+new10_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = new10_rate)
+
+new10_mod |> model_diagnosis() # Quantiles
+new10_mod |> model_homoscedasticity() # period
+new10_mod |> summary()
+
+
+new10_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = new10_rate)
+
+new10_modh |> model_diagnosis() # No problems
+new10_modh |> model_homoscedasticity() # No problems
+new10_modh |> summary()
+
+# Slightly greater rate in the second period, but not by much. No difference between specialisation levels
+
+new10_results <- new10_modh |>
+  mod_summary()
+new10_results
 
 
 
@@ -623,9 +609,8 @@ lost_modh <- glmmTMB(
   dispformula = ~period,
   family = gaussian,
   data = lost_rate)
-# turlost_modh <- tar_read(turlost_mod) # To double-check targets
 
-lost_modh |> model_diagnosis() # no problems
+lost_modh |> model_diagnosis() # No problems
 lost_modh |> model_homoscedasticity() # No problems
 lost_modh |> summary()
 # Greater species loss in the second period
@@ -633,6 +618,43 @@ lost_modh |> summary()
 lost_results <- lost_modh |>
   mod_summary()
 lost_results
+
+
+## Top 10 metres
+
+lost10_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin()
+
+lost10_rate |>
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+lost10_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = lost10_rate)
+
+lost10_mod |> model_diagnosis() # Quantiles
+lost10_mod |> model_homoscedasticity() # period
+lost10_mod |> summary()
+
+lost10_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = lost10_rate)
+
+lost_modh |> model_diagnosis() # No problems
+lost_modh |> model_homoscedasticity() # No problems
+lost_modh |> summary()
+# Greater species loss in the second period
+
+lost10_results <- lost10_modh |>
+  mod_summary()
+lost10_results
 
 
 
@@ -1823,4 +1845,57 @@ eleextra_figure <- eleextra_emmeans |> gg_results() +
         axis.title.y = element_blank())
 eleextra_figure |> ggsave(file = "Results/Extra/Altitudinal_change.png", width = 20, height = 15, units = "cm")
 
-
+# turnover_species <- elevation_wide |>
+#   select(!first:third) |>
+#   mutate(presence1 = ifelse(is.na(distance1), 0, 1),
+#          presence2 = ifelse(is.na(distance2), 0, 1),
+#          presence3 = ifelse(is.na(distance3), 0, 1),
+#          turnover1 = presence2 - presence1,
+#          turnover2 = presence3 - presence2,
+#          development = case_when(turnover1 == 1 & turnover2 == 1 ~ "Error",
+#                                  turnover1 == 1 & turnover2 == 0 ~ "Appeared1",
+#                                  turnover1 == 1 & turnover2 == -1 ~ "Forth_back",
+#                                  turnover1 == 0 & turnover2 == 1 ~ "Appeared2",
+#                                  turnover1 == 0 & turnover2 == 0 ~ "Remained",
+#                                  turnover1 == 0 & turnover2 == -1 ~ "Disappeared2",
+#                                  turnover1 == -1 & turnover2 == 1 ~ "Back_forth",
+#                                  turnover1 == -1 & turnover2 == 0 ~ "Disappeared1",
+#                                  turnover1 == -1 & turnover2 == -1 ~ "Error")) |>
+#   select(!distance1:distance3) |>
+#   relocate(development, .after = species) |>
+#   mutate(rate1 = turnover1 / period1,
+#          rate2 = turnover2 / period2) |>
+#   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
+#   mutate(rate = ifelse(period == "period1", rate1, rate2)) |>
+#   relocate(period:rate, .after = development) |>
+#   mutate(period = as.factor(period))
+#
+# turnover_grouped <- turnover_species |>
+#   summarise(.by = c("specialisation", "development"), total = n() / 2) |> # Divide by two since for each species we have two rows, one per period
+#   arrange(development, specialisation)
+#
+# turnover_bydevelopment <- turnover_species |>
+#   summarise(.by = c("development"), total = n() / 2) # Divide by two since for each species we have two rows, one per period
+#
+#
+# # By summit
+#
+# turnover_summit <- turnover_species |>
+#   summarise(.by = c(summit, period, specialisation),
+#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE),
+#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE),
+#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+#
+# turnover_summit_tourist <- turnover_species |>
+#   filter(development %in% c("Forth_back", "Back_forth")) |>
+#   summarise(.by = c(summit, period),
+#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE),
+#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE),
+#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
+#
+# turnover_summit_nontourist <- turnover_species |>
+#   filter(!(development %in% c("Forth_back", "Back_forth"))) |>
+#   summarise(.by = c(summit, period),
+#             new = sum(case_when(rate > 0 ~ rate), na.rm = TRUE),
+#             nochange = sum(case_when(rate == 0 ~ rate), na.rm = TRUE),
+#             lost = sum(case_when(rate < 0 ~ rate), na.rm = TRUE))
