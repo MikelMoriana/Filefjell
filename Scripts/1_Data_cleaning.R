@@ -6,7 +6,7 @@ source("Scripts/0_setup.R")
 
 # Data----
 
-elevation_1972_2009 <- read_csv2("data_raw/Filefjell_1972_2009.csv")
+filefjell_1972_2009 <- read_csv2("data_raw/Filefjell_1972_2009.csv")
 filefjell_2024 <- read_csv2("data_raw/Filefjell_2024.csv")
 filefjell_2025 <- read_csv2("data_raw/Filefjell_2025.csv")
 filefjell_species <- read_csv2("data_raw/Filefjell_species.csv")
@@ -21,7 +21,7 @@ polygones <- read_csv2("data_raw/Filefjell_polygones.csv")
 
 # We divide 1972and 2009 into two dataframes and tidy them
 
-elevation_1972_tidy <- elevation_1972_2009 |>
+filefjell_1972_tidy <- filefjell_1972_2009 |>
   filter(Year == 1972) |>
   left_join(visit_dates |>
               select(!c(Year2:Data2)),
@@ -33,7 +33,7 @@ elevation_1972_tidy <- elevation_1972_2009 |>
   data_tidying() |>
   arrange(summit, year, species)
 
-elevation_2008_2009_tidy <- elevation_1972_2009 |>
+filefjell_2008_2009_tidy <- filefjell_1972_2009 |>
   filter(Year == 2009) |>
   select(!Year) |>
   left_join(visit_dates |>
@@ -50,13 +50,13 @@ elevation_2008_2009_tidy <- elevation_1972_2009 |>
 
 # We tidy the 2024 and 2025 data, calculate distance to summit and combine them
 
-elevation_2024_2025_tidy <- filefjell_2024 |>
+filefjell_2024_2025_tidy <- filefjell_2024 |>
   select(c(Top:Altitude, Rareness)) |>
   rbind(filefjell_2025 |>
           select(!Type) |>
           mutate(Rareness = NA)) |>
   data_tidying() |>
-  mutate(distance = elevation - altitude) |>
+  mutate(distance = height - altitude) |>
   select(!altitude) |>
   relocate(distance, .after = species) |>
   mutate(rareness = ifelse(rareness == "–", NA, rareness)) |>
@@ -84,7 +84,7 @@ polygones_tidy <- polygones |>
   rename(summit = layer) |>
   relocate(summit) |>
   mutate(summit = str_replace(summit, "_NiN3", "")) |>
-  left_join(elevation_2024_2025_tidy |>
+  left_join(filefjell_2024_2025_tidy |>
               select(summit, date, weather) |>
               distinct(),
             by = "summit") |>
@@ -95,11 +95,11 @@ polygones_tidy <- polygones |>
   mutate(type = str_replace(type, "-", ""))
 
 polygones_cover <- polygones_tidy |>
-  summarise(.by = c(summit:recorder, type), area = sum(area_m2)) |>
+  summarise(.by = c(summit:recorder, type), area_m2 = sum(area_m2)) |>
   group_by(summit) |>
-  mutate(percentage = 100 * area / sum(area)) |>
+  mutate(percentage = 100 * area_m2 / sum(area_m2)) |>
   ungroup() |>
-  select(!area)
+  select(!area_m2)
 
 type_cover_tidy <- type_cover |>
   data_tidying() |>
@@ -128,29 +128,29 @@ summit_data_tidy <- summit_data |>
 
 # We identify errors to correct----
 
-## Summits' elevations
-# There are some differences among years in the summits elevations. We use the values from Norgeskart
+## Summits' altitudes
+# There are some differences among years in the summits altitudes. We use the values from Norgeskart
 
 
 ## Species names
 
-species_tidy_lost <- elevation_1972_tidy |>
-  rbind(elevation_2008_2009_tidy) |>
+species_tidy_lost <- filefjell_1972_tidy |>
+  rbind(filefjell_2008_2009_tidy) |>
   select(species) |>
   arrange(species) |>
   distinct() |>
-  anti_join(elevation_2024_2025_tidy |>
+  anti_join(filefjell_2024_2025_tidy |>
               select(species) |>
               arrange(species) |>
               distinct(),
             by = "species")
 
-species_tidy_new <- elevation_2024_2025_tidy |>
+species_tidy_new <- filefjell_2024_2025_tidy |>
   select(species) |>
   arrange(species) |>
   distinct() |>
-  anti_join(elevation_1972_tidy |>
-              rbind(elevation_2008_2009_tidy) |>
+  anti_join(filefjell_1972_tidy |>
+              rbind(filefjell_2008_2009_tidy) |>
               select(species) |>
               arrange(species) |>
               distinct(),
@@ -174,65 +174,65 @@ species_tidy_new
 
 # We create the clean objects----
 
-elevation_1972_clean <- elevation_1972_tidy |>
+filefjell_1972_clean <- filefjell_1972_tidy |>
   left_join(summit_data_tidy |>
-              select(summit, elevation) |>
-              rename(elevation_correct = elevation),
+              select(summit, height) |>
+              rename(height_correct = height),
             by = "summit") |>
-  select(!elevation) |>
-  rename(elevation = elevation_correct) |>
-  relocate(elevation, .after = summit) |>
+  select(!height) |>
+  rename(height = height_correct) |>
+  relocate(height, .after = summit) |>
   mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan",
                              species == "Jun_trif" ~ "Jun_tri",
                              species == "Poa_x_jem" ~ "Poa_jem",
                              species == "Sil_acu" ~ "Sil_aca",
                              TRUE ~ species))
 
-elevation_2008_2009_clean <- elevation_2008_2009_tidy |>
+filefjell_2008_2009_clean <- filefjell_2008_2009_tidy |>
   left_join(summit_data_tidy |>
-              select(summit, elevation) |>
-              rename(elevation_correct = elevation),
+              select(summit, height) |>
+              rename(height_correct = height),
             by = "summit") |>
-  select(!elevation) |>
-  rename(elevation = elevation_correct) |>
-  relocate(elevation, .after = summit) |>
+  select(!height) |>
+  rename(height = height_correct) |>
+  relocate(height, .after = summit) |>
   mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan",
                              species == "Jun_trif" ~ "Jun_tri",
                              species == "Poa_x_jem" ~ "Poa_jem",
                              species == "Sil_acu" ~ "Sil_aca",
                              TRUE ~ species))
 
-elevation_2024_2025_clean <-elevation_2024_2025_tidy |>
+filefjell_2024_2025_clean <- filefjell_2024_2025_tidy |>
   left_join(summit_data_tidy |>
-              select(summit, elevation) |>
-              rename(elevation_correct = elevation),
+              select(summit, height) |>
+              rename(height_correct = height),
             by = "summit") |>
-  select(!elevation) |>
-  rename(elevation = elevation_correct) |>
-  relocate(elevation, .after = summit) |>
+  select(!height) |>
+  rename(height = height_correct) |>
+  relocate(height, .after = summit) |>
   mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo",
                              TRUE ~ species))
 
 
 # Double checking species loss
 
-species_clean_lost <- elevation_1972_clean |>
-  rbind(elevation_2008_2009_clean) |>
+species_clean_lost <- filefjell_1972_clean |>
+  rbind(filefjell_2008_2009_clean) |>
   select(species) |>
   arrange(species) |>
   distinct() |>
-  anti_join(elevation_2024_2025_clean |>
+  anti_join(filefjell_2024_2025_clean |>
               select(species) |>
               arrange(species) |>
               distinct(),
             by = "species")
 
-species_clean_new <- elevation_2024_2025_clean |>
+species_clean_new <- filefjell_2024_2025_clean |>
   select(species) |>
   arrange(species) |>
   distinct() |>
-  anti_join(elevation_1972_clean |>
-              rbind(elevation_2008_2009_clean) |>
+  anti_join(filefjell_1972_clean |>
+              rbind(filefjell_2008_2009_clean) |>
               select(species) |>
               arrange(species) |>
               distinct(),
@@ -244,12 +244,12 @@ species_clean_new
 
 # Final files
 
-elevation_data_clean <- elevation_1972_clean |>
-  rbind(elevation_2008_2009_clean) |>
+filefjell_data_clean <- filefjell_1972_clean |>
+  rbind(filefjell_2008_2009_clean) |>
   mutate(weather = NA,
          rareness = NA) |>
   relocate(weather, .after = date) |>
-  rbind(elevation_2024_2025_clean) |>
+  rbind(filefjell_2024_2025_clean) |>
   left_join(filefjell_species, by = "species") |>
   mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
   relocate(c(specialisation, functional), .after = species) |>
@@ -269,16 +269,16 @@ type_species_clean <- type_species_tidy |>
             by = c("summit", "main_type")) |>
   relocate(percentage, .after = main_type) |>
   left_join(summit_data_tidy |>
-              select(summit, elevation, summit_decare) |>
-              rename(elevation_correct = elevation),
+              select(summit, height, summit_decare) |>
+              rename(height_correct = height),
             by = "summit") |>
-  select(!elevation) |>
-  rename(elevation = elevation_correct) |>
+  select(!height) |>
+  rename(height = height_correct) |>
   mutate(habitat_decare = summit_decare * percentage / 100) |>
-  relocate(c(elevation, summit_decare), .after = summit) |>
+  relocate(c(height, summit_decare), .after = summit) |>
   relocate(habitat_decare, .after = percentage) |>
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
   arrange(summit, year, species)
 
-elevation_data_clean |> write_csv("data_clean/Elevation_data_clean.csv")
+filefjell_data_clean |> write_csv("data_clean/Filefjell_data_clean.csv")
 type_species_clean |> write_csv("data_clean/Type_species_clean.csv")
