@@ -17,12 +17,12 @@ manual_positions <- tribble(
   
   
   # Tidy data
-  "elevation_1972_2009_file",         0,   -300,
-  "elevation_1972_2009",            200,   -300,
-  "elevation_1972_tidy",            400,   -300,
+  "filefjell_1972_2009_file",         0,   -300,
+  "filefjell_1972_2009",            200,   -300,
+  "filefjell_1972_tidy",            400,   -300,
   "visit_dates_file",                 0,   -200,
   "visit_dates",                    200,   -200,
-  "elevation_2008_2009_tidy",       400,   -200,
+  "filefjell_2008_2009_tidy",       400,   -200,
   "summit_data_file",                 0,   -100, 
   "summit_data",                    200,   -100,
   "summit_data_tidy",               400,   -100,
@@ -31,7 +31,7 @@ manual_positions <- tribble(
   "filefjell_2024",                 200,      0,
   "filefjell_2025_file",              0,    100,
   "filefjell_2025",                 200,    100,
-  "elevation_2024_2025_tidy",       400,      0,
+  "filefjell_2024_2025_tidy",       400,      0,
   "type_species_tidy",              600,    100,
   
   "polygones_file",                   0,    200,
@@ -46,10 +46,10 @@ manual_positions <- tribble(
   # Clean data
   "filefjell_species_file",         850,      0,
   "filefjell_species",             1050,      0,
-  "elevation_1972_clean",           600,   -250,
-  "elevation_2008_2009_clean",      600,   -150,
-  "elevation_2024_2025_clean",      600,      0,
-  "elevation_data_clean",          1200,   -100,
+  "filefjell_1972_clean",           600,   -250,
+  "filefjell_2008_2009_clean",      600,   -150,
+  "filefjell_2024_2025_clean",      600,      0,
+  "filefjell_data_clean",          1200,   -100,
   "type_species_clean",            1050,    400,
   
   # Datasets for analyses
