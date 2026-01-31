@@ -451,8 +451,6 @@ new_species_types <- type_species |>
 # Rate Analyses----
 ## Richness----
 
-## Whole summit
-
 richness_rate |>
   mutate(per_spe = paste0(period, specialisation)) |>
   ggplot(aes(x = per_spe, y = rate)) +
@@ -492,74 +490,6 @@ richrate_results <- richrate_modh |>
 richrate_results
 
 
-## 10 metres
-
-richrate10_mod <- glmmTMB(
-  rate ~
-    period * specialisation + (1 | summit),
-  family = gaussian,
-  data = richness10_rate)
-
-richrate10_mod |> model_diagnosis() # No problems
-richrate10_mod |> model_homoscedasticity() # period
-richrate10_mod |> summary()
-
-richrate10_modh <- glmmTMB(
-  rate ~
-    period * specialisation + (1 | summit),
-  dispformula = ~period,
-  family = gaussian,
-  data = richness10_rate)
-
-richrate10_modh |> model_diagnosis() # No problems
-richrate10_modh |> model_homoscedasticity() # No problems
-richrate10_modh |> summary()
-
-richrate10_results <- richrate10_mod |>
-  mod_summary()
-richrate10_results
-
-
-# ## Functional
-#
-# richfun_rate |>
-#   mutate(per_spe = paste0(period, functional)) |>
-#   ggplot(aes(x = per_spe, y = rate)) +
-#   geom_violin() +
-#   labs(title = " elevations by Year",
-#        x = "Year",
-#        y = "Vertical elevation to Top (meters)") +
-#   theme_minimal()
-#
-# richfun_rate |>
-#   ggplot() +
-#   geom_histogram(aes(x = rate))
-#
-# richfun_rate_mod <- glmmTMB(
-#   rate ~
-#     period * functional + (1 | summit),
-#   family = gaussian,
-#   data = richfun_rate)
-#
-# richfun_rate_mod |> model_diagnosis() # Uniformity, outliers and quantiles
-# richfun_rate_mod |> model_homoscedasticity() # period and functional
-# richfun_rate_mod |> summary()
-#
-# richfun_rate_modh <- glmmTMB(
-#   rate ~
-#     period * functional + (1 | summit),
-#   dispformula = ~period+functional,
-#   family = gaussian,
-#   data = richfun_rate)
-#
-# richfun_rate_modh |> model_diagnosis() # No problems
-# richfun_rate_modh |> model_homoscedasticity() # No problems
-# richfun_rate_modh |> summary()
-#
-# richfun_rate_results <- richfun_rate_modh |>
-#   modfun_summary()
-# richfun_rate_results
-
 
 
 ## New species----
@@ -586,45 +516,6 @@ new_mod |> summary()
 new_results <- new_mod |>
   mod_summary()
 new_results
-
-
-## Top 10 metres
-
-new10_rate |>
-  ggplot(aes(x = period, y = rate)) +
-  geom_violin()
-
-new10_rate |>
-  ggplot() +
-  geom_histogram(aes(x = rate))
-
-new10_mod <- glmmTMB(
-  rate ~
-    period * specialisation + (1 | summit),
-  family = gaussian,
-  data = new10_rate)
-
-new10_mod |> model_diagnosis() # Quantiles
-new10_mod |> model_homoscedasticity() # period
-new10_mod |> summary()
-
-
-new10_modh <- glmmTMB(
-  rate ~
-    period * specialisation + (1 | summit),
-  dispformula = ~period,
-  family = gaussian,
-  data = new10_rate)
-
-new10_modh |> model_diagnosis() # No problems
-new10_modh |> model_homoscedasticity() # No problems
-new10_modh |> summary()
-
-# Slightly greater rate in the second period, but not by much. No difference between specialisation levels
-
-new10_results <- new10_modh |>
-  mod_summary()
-new10_results
 
 
 
@@ -666,48 +557,11 @@ lost_results <- lost_modh |>
 lost_results
 
 
-## Top 10 metres
-
-lost10_rate |>
-  ggplot(aes(x = period, y = rate)) +
-  geom_violin()
-
-lost10_rate |>
-  ggplot() +
-  geom_histogram(aes(x = rate))
-
-lost10_mod <- glmmTMB(
-  rate ~
-    period * specialisation + (1 | summit),
-  family = gaussian,
-  data = lost10_rate)
-
-lost10_mod |> model_diagnosis() # Quantiles
-lost10_mod |> model_homoscedasticity() # period
-lost10_mod |> summary()
-
-lost10_modh <- glmmTMB(
-  rate ~
-    period * specialisation + (1 | summit),
-  dispformula = ~period,
-  family = gaussian,
-  data = lost10_rate)
-
-lost_modh |> model_diagnosis() # No problems
-lost_modh |> model_homoscedasticity() # No problems
-lost_modh |> summary()
-# Greater species loss in the second period
-
-lost10_results <- lost10_modh |>
-  mod_summary()
-lost10_results
-
-
 
 
 ## Altitude change----
 
-#### Frequentist analysis
+## Frequentist analysis
 
 altitude_rate |>
   ggplot() +
@@ -725,7 +579,7 @@ altrate_mod |> summary()
 
 
 
-#### No distributions I try get closely to fitting. I try bayesian
+## No distributions I try get closely to fitting. I try bayesian
 
 ### 1. Choosing weakly informative priors
 # Response scale. The rate of elevation change will not go beyond -2.133 to 2.133 (32 metres in 15 years, highest possible change in shortest time span between surveys)
@@ -987,42 +841,6 @@ altrate_results
 
 
 
-## Top 10 metres
-
-altrate10_tmod <- brm(
-  bf(rate ~
-       period * specialisation + (1|summit) + (1|species),
-     sigma ~ period),
-  family = student(),
-  prior = priors_t3,
-  data = altitude10_rate,
-  chains = 4, iter = 4000, seed = 811,
-  control = list(adapt_delta = 0.95)
-)
-
-altrate10_tmod |> summary()
-# Rhat = 1.00 for all parameters
-# Bulk and Tail Effective sample size > 1000 for all parameters
-# No divergences
-
-pp_check(altrate10_tmod, type="dens_overlay_grouped", group="period")
-pp_check(altrate10_tmod, type="ecdf_overlay_grouped", group="period")
-
-
-altrate10_t_rates <- altitude10_rate$rate
-altrate10_t_pred <- posterior_predict(altrate10_tmod, draws = 1000)
-altrate10_t_loo <- loo(altrate10_tmod, save_psis = TRUE)
-
-ppc_loo_pit_qq(altrate10_t_rates,
-               altrate10_t_pred,
-               psis_object = altrate10_t_loo$psis_object)
-
-altrate10_results <- altrate10_tmod |>
-  mod_summary()
-altrate10_results
-
-
-
 
 # Rate Results----
 
@@ -1240,6 +1058,331 @@ variance_ft <- richrate_disp |>
   autofit()
 variance_ft
 variance_ft |> save_as_image(path = "Results/Rates_Variance_table.png")
+
+
+
+## Top 10 metres. Analyses----
+
+## Richness
+
+richrate10_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = richness10_rate)
+
+richrate10_mod |> model_diagnosis() # No problems
+richrate10_mod |> model_homoscedasticity() # period
+richrate10_mod |> summary()
+
+richrate10_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = richness10_rate)
+
+richrate10_modh |> model_diagnosis() # No problems
+richrate10_modh |> model_homoscedasticity() # No problems
+richrate10_modh |> summary()
+
+richrate10_results <- richrate10_mod |>
+  mod_summary()
+richrate10_results
+
+
+## New species
+
+new10_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin()
+
+new10_rate |>
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+new10_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = new10_rate)
+
+new10_mod |> model_diagnosis() # Quantiles
+new10_mod |> model_homoscedasticity() # period
+new10_mod |> summary()
+
+
+new10_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = new10_rate)
+
+new10_modh |> model_diagnosis() # No problems
+new10_modh |> model_homoscedasticity() # No problems
+new10_modh |> summary()
+
+# Slightly greater rate in the second period, but not by much. No difference between specialisation levels
+
+new10_results <- new10_modh |>
+  mod_summary()
+new10_results
+
+
+## Lost species
+
+lost10_rate |>
+  ggplot(aes(x = period, y = rate)) +
+  geom_violin()
+
+lost10_rate |>
+  ggplot() +
+  geom_histogram(aes(x = rate))
+
+lost10_mod <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  family = gaussian,
+  data = lost10_rate)
+
+lost10_mod |> model_diagnosis() # Quantiles
+lost10_mod |> model_homoscedasticity() # period
+lost10_mod |> summary()
+
+lost10_modh <- glmmTMB(
+  rate ~
+    period * specialisation + (1 | summit),
+  dispformula = ~period,
+  family = gaussian,
+  data = lost10_rate)
+
+lost10_modh |> model_diagnosis() # No problems
+lost10_modh |> model_homoscedasticity() # No problems
+lost10_modh |> summary()
+# Greater species loss in the second period
+
+lost10_results <- lost10_modh |>
+  mod_summary()
+lost10_results
+
+
+## Altitude change
+
+altrate10_tmod <- brm(
+  bf(rate ~
+       period * specialisation + (1|summit) + (1|species),
+     sigma ~ period),
+  family = student(),
+  prior = priors_t3,
+  data = altitude10_rate,
+  chains = 4, iter = 4000, seed = 811,
+  control = list(adapt_delta = 0.95)
+)
+
+altrate10_tmod |> summary()
+# Rhat = 1.00 for all parameters
+# Bulk and Tail Effective sample size > 1000 for all parameters
+# No divergences
+
+pp_check(altrate10_tmod, type="dens_overlay_grouped", group="period")
+pp_check(altrate10_tmod, type="ecdf_overlay_grouped", group="period")
+
+
+altrate10_t_rates <- altitude10_rate$rate
+altrate10_t_pred <- posterior_predict(altrate10_tmod, draws = 1000)
+altrate10_t_loo <- loo(altrate10_tmod, save_psis = TRUE)
+
+ppc_loo_pit_qq(altrate10_t_rates,
+               altrate10_t_pred,
+               psis_object = altrate10_t_loo$psis_object)
+
+altrate10_results <- altrate10_tmod |>
+  mod_summary()
+altrate10_results
+
+
+
+
+## Top 10 metres. Results----
+
+## Mean
+
+emmeans10_overview <- richrate10_results$emmeans_df |>
+  mutate(Model = "Species richness") |>
+  rbind(new10_results$emmeans_df |>
+          mutate(Model = "New species")) |>
+  rbind(lost10_results$emmeans_df |>
+          mutate(Model = "Lost species")) |>
+  rbind(altrate10_results$emmeans_df |>
+          mutate(df = NA_real_,
+                 statistic = NA_real_,
+                 Model = "Uppermost occurrence") |>
+          relocate(df, .after = Estimate) |>
+          relocate(statistic, .after = CI_upper)) |>
+  relocate(Model) |>
+  mutate(Model = factor(Model, levels = c("Species richness", "New species", "Lost species", "Uppermost occurrence"))) |>
+  mutate(Model = recode(Model, "Species richness" = "Species\nrichness", "Uppermost occurrence" = "Uppermost\noccurrence")) |>
+  rename(Specialisation = specialisation)
+
+emmeans10_table <- emmeans10_overview |>
+  select(!c(df, SE, statistic)) |>
+  arrange(Model, Period, Specialisation) |>
+  mutate(Period = case_when(Period == "period1" ~ "1972–2008/09",
+                            Period == "period2" ~ "2008/09–2024/25"),
+         Specialisation = case_when(Specialisation == "alpine" ~ "Specialist",
+                                    Specialisation == "generalist" ~ "Generalist")) |>
+  flextable() |>
+  bg(part = "header", bg = "black") |>
+  color(part = "header", color = "white") |>
+  bold(part = "header") |>
+  bg(part = "body", bg = "white") |>
+  color(part = "body", color = "black") |>
+  merge_v(j = "Model") |>
+  merge_v(j = "Period") |>
+  hline(i = c(4, 8, 12)) |>
+  hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
+  bold(i = ~ ((CI_lower * CI_upper) > 0), j = 3:7) |>
+  set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |>
+  align(part = "all", j = 4:7, align = "center") |>
+  flextable::font(part = "all", fontname = "Times New Roman") |>
+  fontsize(size = 12) |>
+  autofit()
+emmeans10_table
+emmeans_table |> save_as_image(path = "Results/Rates10_emmeans_table.png")
+
+
+contrasts10_overview <- richrate10_results$contrast_df |>
+  mutate(Model = "Species richness") |>
+  rbind(new10_results$contrast_df |>
+          mutate(Model = "New species")) |>
+  rbind(lost10_results$contrast_df |>
+          mutate(Model = "Lost species")) |>
+  rbind(altrate10_results$contrast_df |>
+          mutate(df = NA_real_,
+                 statistic = NA_real_,
+                 Model = "Uppermost occurrence") |>
+          relocate(df, .after = Estimate) |>
+          relocate(statistic, .after = CI_upper)) |>
+  relocate(Model) |>
+  mutate(Model = factor(Model, levels = c("Species richness", "New species", "Lost species", "Uppermost occurrence"))) |>
+  mutate(Model = recode(Model, "Species richness" = "Species\nrichness", "Uppermost occurrence" = "Uppermost\noccurrence"))
+
+contrasts10_table <- contrasts10_overview |>
+  select(!c(df, SE, statistic)) |>
+  mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Period 1 – Period 2. Specialists",
+                              Contrast == "1G-2G" ~ "Period 1 – Period 2. Generalists",
+                              Contrast == "1A-1G" ~ "Specialists – Generalists. Period 1",
+                              Contrast == "2A-2G" ~ "Specialists – Generalists. Period 2")) |>
+  separate_wider_delim(cols = Contrast, delim = ".", names = c("Contrast", "Group")) |>
+  flextable() |>
+  bg(part = "header", bg = "black") |>
+  color(part = "header", color = "white") |>
+  bold(part = "header") |>
+  bg(part = "body", bg = "white") |>
+  color(part = "body", color = "black") |>
+  merge_v(j = "Model") |>
+  merge_v(j = "Contrast") |>
+  hline(i = c(4, 8, 12)) |>
+  hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
+  bold(i = ~ ((CI_lower * CI_upper) > 0), j = -1) |>
+  set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |>
+  align(part = "all", j = -c(1:3), align = "center") |>
+  flextable::font(part = "all", fontname = "Times New Roman") |>
+  fontsize(size = 12) |>
+  autofit()
+contrasts10_table
+contrasts10_table |> save_as_image(path = "Results/Rates10_contrasts_table.png")
+
+
+
+## Variance
+
+richrate10_disp <- richrate10_modh |>
+  emmeans(~ period, component = "disp") |>
+  as.data.frame() |>
+  transmute(period,
+            logvar = emmean,
+            logvar_lwr = lower.CL,
+            logvar_upr = upper.CL,
+            variance = exp(logvar), # Back-transform to variance with 95% CIs
+            var_lwr = exp(logvar_lwr),
+            var_upr = exp(logvar_upr))
+
+new10_disp <- new10_modh |>
+  emmeans(~ period, component = "disp") |>
+  as.data.frame() |>
+  transmute(period,
+            logvar = emmean,
+            logvar_lwr = lower.CL,
+            logvar_upr = upper.CL,
+            variance = exp(logvar), # Back-transform to variance with 95% CIs
+            var_lwr = exp(logvar_lwr),
+            var_upr = exp(logvar_upr))
+
+lost10_disp <- lost10_modh |>
+  emmeans(~ period, component = "disp") |>
+  as.data.frame() |>
+  transmute(period,
+            logvar = emmean,
+            logvar_lwr = lower.CL,
+            logvar_upr = upper.CL,
+            variance = exp(logvar), # Back-transform to variance with 95% CIs
+            var_lwr = exp(logvar_lwr),
+            var_upr = exp(logvar_upr))
+
+altrate10_disp <- altrate10_tmod |>
+  spread_draws(b_sigma_Intercept, b_sigma_periodperiod2) |>
+  mutate(logvar_period1 = b_sigma_Intercept,
+         logvar_period2 = b_sigma_Intercept + b_sigma_periodperiod2,
+         var_period1 = exp(b_sigma_Intercept),
+         var_period2 = exp(b_sigma_Intercept + b_sigma_periodperiod2)) |>
+  pivot_longer(cols = c(logvar_period1, logvar_period2, var_period1, var_period2),
+               names_to = c("scale", "period"),
+               names_pattern = "(logvar|var)_period(\\d)") |>
+  summarise(.by = c("period", "scale"),
+            estimate = mean(value),
+            lwr = quantile(value, 0.025),
+            upr = quantile(value, 0.975)) |>
+  pivot_longer(cols = c(estimate, lwr, upr)) |>
+  mutate(period = paste0("period", period),
+         names = paste0(scale, "_", name)) |>
+  select((!c("scale", "name"))) |>
+  pivot_wider(names_from = names, values_from = value) |>
+  rename(logvar = logvar_estimate,
+         variance = var_estimate)
+
+variance10_ft <- richrate10_disp |>
+  mutate(model = "Species richness",
+         joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
+  select(model, period, joined) |>
+  rbind(new10_disp |>
+          mutate(model = "New species",
+                 joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
+          select(model, period, joined)) |>
+  rbind(lost10_disp |>
+          mutate(model = "Lost species",
+                 joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
+          select(model, period, joined)) |>
+  rbind(altrate10_disp |>
+          mutate(model = "Uppermost occurrence",
+                 joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
+          select(model, period, joined)) |>
+  pivot_wider(names_from = period, values_from = joined) |>
+  flextable() |>
+  set_header_labels(model = "Model",
+                    period1 = "Period 1",
+                    period2 = "Period 2") |>
+  bg(part = "header", bg = "black") |>
+  color(part = "header", color = "white") |>
+  bold(part = "header", bold = TRUE) |>
+  bg(part = "body", bg = "white") |>
+  color(part = "body", color = "black") |>
+  align(part = "all", j = 2:3, align = "center") |>
+  flextable::font(part = "all", fontname = "Times New Roman") |>
+  autofit()
+variance10_ft
+variance10_ft |> save_as_image(path = "Results/Rates10_Variance_table.png")
 
 
 
