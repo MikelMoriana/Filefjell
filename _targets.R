@@ -283,7 +283,8 @@ list(
       mutate(habitat_decare = summit_decare * percentage / 100) |>
       relocate(c(height, summit_decare), .after = summit) |>
       relocate(habitat_decare, .after = percentage) |>
-      mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
+      mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")),
+             main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7"))) |>
       arrange(summit, year, species)
   ),
   # General datasets----
@@ -523,7 +524,7 @@ list(
       mutate(rate = change / time)
   ),
   tar_target(
-    name = richrate_mod,
+    name = richness_mod,
     command = glmmTMB(
       rate ~
         period * specialisation + (1 | summit),
@@ -532,8 +533,8 @@ list(
       data = richness_rate)
   ),
   tar_target(
-    name = richrate_results,
-    command = richrate_mod |>
+    name = richness_results,
+    command = richness_mod |>
       mod_summary()
   ),
   tar_target(
@@ -554,7 +555,7 @@ list(
       mutate(rate = change / time)
   ),
   tar_target(
-    name = richrate10_mod,
+    name = richness10_mod,
     command = glmmTMB(
       rate ~
         period * specialisation + (1 | summit),
@@ -563,8 +564,8 @@ list(
       data = richness10_rate)
   ),
   tar_target(
-    name = richrate10_results,
-    command = richrate10_mod |>
+    name = richness10_results,
+    command = richness10_mod |>
       mod_summary()
   ),
   # Turnover----
@@ -690,203 +691,82 @@ list(
     name = lost10_results,
     command = lost10_mod |>
       mod_summary()
+  ),
+  # Altitude----
+  tar_target(
+    name = altitude_rate,
+    command = filefjell_simplified |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(period1 = (second - first) * (-1),
+             period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
+      select(!c(first:third)) |>
+      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+      filter(!is.na(change)) |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = change / time)
+  ),
+  tar_target(
+    name = priors_t,
+    command = c(
+      # Mean model (as before)
+      prior(normal(0, 0.5), class = "Intercept"),
+      prior(normal(0, 0.5), class = "b"),
+      prior(exponential(3), class = "sd"),
+      prior(gamma(2, 0.4), class = "nu"),
+      # Sigma model (log-scale)
+      prior(normal(-1.098612, 0.5), class = "Intercept", dpar = "sigma"), 
+      prior(normal(0, 0.3), class = "b", dpar = "sigma")
+    )
+  ),
+  tar_target(
+    name = altitude_bay,
+    command = brm(
+      bf(rate ~ 
+           period * specialisation + (1|summit) + (1|species),
+         sigma ~ period),
+      family = student(),
+      prior = priors_t,
+      data = altitude_rate,
+      chains = 4, iter = 4000, seed = 811,
+      control = list(adapt_delta = 0.95)
+    )
+  ),
+  tar_target(
+    name = altitude_results,
+    command = altitude_bay |>
+      mod_summary()
+  ),
+  tar_target(
+    name = altitude10_rate,
+    command = filefjell_simplified |>
+      filter(distance <= 10) |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(period1 = (second - first) * (-1),
+             period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
+      select(!c(first:third)) |>
+      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+      filter(!is.na(change)) |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(rate = change / time)
+  ),
+  tar_target(
+    name = altitude10_bay,
+    command = brm(
+      bf(rate ~
+           period * specialisation + (1|summit) + (1|species),
+         sigma ~ period),
+      family = student(),
+      prior = priors_t,
+      data = altitude10_rate,
+      chains = 4, iter = 4000, seed = 811,
+      control = list(adapt_delta = 0.95)
+    )
+  ),
+  tar_target(
+    name = altitude10_results,
+    command = altitude10_bay |>
+      mod_summary()
   )
-  # tar_target(
-  #   name = turnover_grouped,
-  #   command = turnover_species |> 
-  #     summarise(.by = c("specialisation", "development"), total = n() / 2) |>
-  #     arrange(development, specialisation)
-  # ),
-  # tar_target(
-  #   name = observations,
-  #   command = elevation_wide |> 
-  #     select(!c(first:third, period1, period2)) |> 
-  #     pivot_longer(cols = c(distance1:distance3), names_to = "year", values_to = "distance") |> 
-  #     mutate(year = case_when(year == "distance1" ~ 1972,
-  #                             year == "distance2" ~ 2009,
-  #                             year == "distance3" ~ 2024)) |> 
-  #     filter(!is.na(distance)) |> 
-  #     summarise(.by = c(year, specialisation), observations = n()) |> 
-  #     arrange(year) |> 
-  #     pivot_wider(names_from = year, values_from = observations) |> 
-  #     mutate(specialisation = ifelse(specialisation == "alpine", "Alpine", "Generalist")) |> 
-  #     rbind(c("extra", "extra1", "extra2", "extra3"), 
-  #           c("specialisation", "1972", "2009", "2024")) |> 
-  #     row_to_names(row_number = 3, remove_rows_above = FALSE) |> 
-  #     mutate(extra = factor(extra, levels = c("specialisation", "Alpine", "Generalist"))) |> 
-  #     arrange(extra)
-  # ),
-  # tar_target(
-  #   name = turnover_development,
-  #   command = turnover_grouped |> 
-  #     pivot_wider(names_from = specialisation, values_from = total) |> 
-  #     mutate(status1 = case_when(development %in% c("Remained", "Disappeared2") ~ "Remained",
-  #                                development %in% c("Appeared1", "Forth_back") ~ "New",
-  #                                development %in% c("Disappeared1", "Back_forth") ~ "Lost",
-  #                                development == "Appeared2" ~ NA),
-  #            status2 = case_when(development %in% c("Remained", "Appeared1") ~ "Remained",
-  #                                development %in% c("Appeared2", "Back_forth") ~ "New",
-  #                                development %in% c("Forth_back", "Disappeared2") ~ "Lost",
-  #                                development == "Disappeared1" ~ NA)) |> 
-  #     relocate(status1, status2) |> 
-  #     rbind(c("extra", "extra1", "extras", "extra2", "extra3"), 
-  #           c("Status 2009", "Status 2024", "development", "Alpine", "Generalist")) |> 
-  #     row_to_names(row_number = 8, remove_rows_above = FALSE) |> 
-  #     mutate(extras = factor(extras, levels = c("development", "Remained", "Appeared1", "Forth_back", "Disappeared1", "Back_forth", "Appeared2", "Disappeared2"))) |>
-  #     arrange(extras) |> 
-  #     select(!extras)
-  # ),
-  # tar_target(
-  #   name = observations_turnover_ft,
-  #   command = observations |> 
-  #     rbind(turnover_development) |> 
-  #     mutate(across(where(is.factor), as.character)) |> 
-  #     row_to_names(row_number = 1) |> 
-  #     flextable() |> 
-  #     bg(part = "header", bg = "black") |> 
-  #     color(part = "header", color = "white") |> 
-  #     bold(part = "header") |> 
-  #     bg(part = "body", bg = "white") |> 
-  #     color(part = "body", color = "black") |> 
-  #     bg(part = "body", i = 3, bg = "black") |> 
-  #     color(part = "body", i = 3, color = "white") |> 
-  #     bold(part = "body", i = 3) |> 
-  #     align(part = "all", j = 2:4, align = "center") |> 
-  #     align(part = "body", i = 3:10, j = 2, align = "left") |> 
-  #     flextable::font(part = "all", fontname = "Times New Roman") |> 
-  #     autofit()
-  # ),
-  # # Elevation----
-  # tar_target(
-  #   name = elevation_wide_new,
-  #   command = elevation_wide |>
-  #     mutate(adj_dist1 = ifelse(is.na(distance1) & !is.na(distance2), 33, distance1),
-  #            adj_dist2 = ifelse(is.na(distance2) & !is.na(distance3), 33, distance2),
-  #            adj_dist3 = ifelse(is.na(distance3) & is.na(distance1) & !is.na(distance2), 33, distance3))
-  # ),
-  # tar_target(
-  #   name = elerate_all,
-  #   command = elevation_wide |>
-  #     mutate(change1 = distance1 - distance2,
-  #            change2 = distance2 - distance3) |>
-  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  #     mutate(period = as.factor(period)) |>
-  #     mutate(change = case_when(period == "period1" ~ change1,
-  #                               period == "period2" ~ change2)) |>
-  #     filter(!is.na(change)) |>
-  #     mutate(rate = change / years)
-  # ),
-  # tar_target(
-  #   name = priors_t,
-  #   command = c(
-  #     prior(normal(0, 0.5), class = "Intercept"),
-  #     prior(normal(0, 0.5), class = "b"),
-  #     prior(exponential(3), class = "sd"),
-  #     prior(gamma(2, 0.4), class = "nu"),
-  #     prior(normal(-1.098612, 0.5), class = "Intercept", dpar = "sigma"), 
-  #     prior(normal(0, 0.3), class = "b", dpar = "sigma")
-  #   )
-  # ),
-  # tar_target(
-  #   name = elerate_all_bayest,
-  #   command = brm(
-  #     bf(rate ~ 
-  #          period * specialisation + (1|summit) + (1|species),
-  #        sigma ~ period),
-  #     family = student(),
-  #     prior = priors_t,
-  #     data = elerate_all,
-  #     chains = 4, iter = 4000, seed = 811,
-  #     control = list(adapt_delta = 0.95)
-  #   )
-  # ),
-  # tar_target(
-  #   name = elerate_all_bayes,
-  #   command = brm(
-  #     bf(rate ~
-  #          period * specialisation + (1|summit) + (1|species),
-  #        sigma ~period),
-  #     family = student(),
-  #     prior = c(
-  #       prior(normal(0, 0.5), class = "b"),
-  #       prior(normal(0, 0.5), class = "Intercept"),
-  #       prior(gamma(46, 1), class = "nu")
-  #     ),
-  #     data = elerate_all,
-  #     control = list(adapt_delta = 0.999),
-  #     seed = 811
-  #   )
-  # ),
-  # tar_target(
-  #   name = elerate_all_results,
-  #   command = elerate_all_bayes |>
-  #     mod_summary()
-  # ),
-  # tar_target(
-  #   name = elerate_remained,
-  #   command = elevation_wide |>
-  #     mutate(change1 = distance1 - distance2,
-  #            change2 = distance2 - distance3) |>
-  #     filter(!is.na(change1) & !is.na(change2)) |>
-  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  #     mutate(period = as.factor(period)) |>
-  #     mutate(change = case_when(period == "period1" ~ change1,
-  #                               period == "period2" ~ change2)) |>
-  #     mutate(rate = change / years) |>
-  #     select(!c(change1, change2))
-  # ),
-  # tar_target(
-  #   name = elerate_rem_bayes,
-  #   command = brm(
-  #     bf(rate ~
-  #          period * specialisation + (1|summit) + (1|species),
-  #        sigma ~period),
-  #     family = student(),
-  #     prior = c(
-  #       prior(normal(0, 0.5), class = "b"),
-  #       prior(normal(0, 0.5), class = "Intercept"),
-  #       prior(gamma(45, 1), class = "nu")
-  #     ),
-  #     data = elerate_remained,
-  #     control = list(adapt_delta = 0.999),
-  #     seed = 811
-  #   )
-  # ),
-  # tar_target(
-  #   name = elerate_rem_results,
-  #   command = elerate_rem_bayes |>
-  #     mod_summary()
-  # ),
-  # tar_target(
-  #   name = elerate_new,
-  #   command = elevation_wide_new |>
-  #     mutate(change1 = adj_dist1 - adj_dist2,
-  #            change2 = adj_dist2 - distance3) |>
-  #     filter(!is.na(change1) & !is.na(change2)) |>
-  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "years") |>
-  #     mutate(period = as.factor(period)) |>
-  #     mutate(change = case_when(period == "period1" ~ change1,
-  #                               period == "period2" ~ change2)) |>
-  #     mutate(rate = change / years) |>
-  #     select(!c(change1, change2))
-  # ),
-  # tar_target(
-  #   name = elerate_new_bayes,
-  #   command = brm(
-  #     bf(rate ~
-  #          period * specialisation + (1|summit) + (1|species),
-  #        sigma ~period),
-  #     family = student(),
-  #     data = elerate_new,
-  #     control = list(adapt_delta = 0.999),
-  #     seed = 811
-  #   )
-  # ),
-  # tar_target(
-  #   name = elerate_new_results,
-  #   command = elerate_new_bayes |>
-  #     mod_summary()
-  # )
   # # # New species per nature type----
   # # tar_target(
   # #   name = colonizers_data,
