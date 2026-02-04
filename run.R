@@ -32,62 +32,80 @@ manual_positions <- tribble(
   "filefjell_2025_file",              0,    100,
   "filefjell_2025",                 200,    100,
   "filefjell_2024_2025_tidy",       400,      0,
-  "type_species_tidy",              600,    100,
+  "type_species_tidy",              600,    300,
   
-  "polygones_file",                   0,    200,
-  "polygones",                      200,    200,
-  "polygones_tidy",                 400,    200,
-  "polygones_cover",                600,    200,
-  "type_cover_file",                  0,    300, 
-  "type_cover",                     200,    300,
-  "type_cover_tidy",                400,    300,
-  "maintype_cover_tidy",            600,    300,
+  "polygones_file",                   0,    500,
+  "polygones",                      200,    500,
+  "polygones_tidy",                 400,    500,
+  "polygones_cover",                600,    500,
+  "type_cover_file",                  0,    600, 
+  "type_cover",                     200,    600,
+  "type_cover_tidy",                400,    600,
+  "maintype_cover_tidy",            600,    600,
   
   # Clean data
-  "filefjell_species_file",         850,      0,
-  "filefjell_species",             1050,      0,
+  "filefjell_species_file",         750,    200,
+  "filefjell_species",              900,    200,
   "filefjell_1972_clean",           600,   -250,
   "filefjell_2008_2009_clean",      600,   -150,
   "filefjell_2024_2025_clean",      600,      0,
-  "filefjell_data_clean",          1200,   -100,
-  "type_species_clean",            1050,    400,
+  "filefjell_data_clean",           900,      0,
+  "type_species_clean",             900,    550,
   
   # Datasets for analyses
-  "visit_years",                   1200,      0,
-  "elevation_wide",                1400,      0,
-  "elevation_wide_new",            1400,    250,
-  "turnover_species",              1600,   -250,
+  "filefjell_simplified",          1100,      0,
+  "summit_periods",                1300,   -100,
   
-  # Turnover
-  "observations",                  1400,   -400,
-  "turnover_grouped",              1600,   -350,
-  "turnover_development",          1800,   -350,
-  "observations_turnover_ft",      2000,   -400,
-  "turnover_summit",               1600,   -100,
-  "turnew_mod",                    1800,   -150,
-  "turnew_results",                2000,   -150,
-  "turlost_mod",                   1800,    -50,
-  "turlost_results",               2000,    -50,
+  # Status
+  "status_survey",                 1300,   -550,
+  "header_map",                    1400,   -600,
+  "status_survey_ft",              1500,   -550,
+  "status_spe_survey",             1300,   -450,
+  "header_spe_map",                1400,   -500,
+  "status_spe_survey_ft",          1500,   -450,
   
   # Richness rate
-  "richness_rate",                 1800,   -250,
-  "richrate_mod",                  2000,   -250,
-  "richrate_results",              2200,   -250,
+  "richness",                      1300,   -350,
+  "richness_rate",                 1500,   -350,
+  "richness_mod",                  1700,   -350,
+  "richness_results",              1900,   -350,
   
-  # Elevation change
-  "elerate_all",                   1800,     50,
-  "elerate_all_bayes",             2000,     50,
-  "elerate_all_results",           2200,     50,
-  "elerate_remained",              1800,    150,
-  "elerate_rem_bayes",             2000,    150,
-  "elerate_rem_results",           2200,    150,
-  "elerate_new",                   1800,    250,
-  "elerate_new_bayes",             2000,    250,
-  "elerate_new_results",           2200,    250,
+  # New species
+  "turnover",                      1300,   -200,
+  "new_rate",                      1500,   -250,
+  "new_mod",                       1700,   -250,
+  "new_results",                   1900,   -250,
+  
+  # Lost species
+  "lost_rate",                     1500,   -150,
+  "lost_mod",                      1700,   -150,
+  "lost_results",                  1900,   -150,
+  
+  # Altitude change
+  "altitude_rate",                 1500,    -50,
+  "priors_t",                      1600,      0,
+  "altitude_bay",                  1700,    -50,
+  "altitude_results",              1900,    -50,
+  
+  # Top 10 metres
+  "richness10",                    1300,    150,
+  "richness10_rate",               1500,    150,
+  "richness10_mod",                1700,    150,
+  "richness10_results",            1900,    150,
+  "turnover10",                    1300,    300,
+  "new10_rate",                    1500,    250,
+  "new10_mod",                     1700,    250,
+  "new10_results",                 1900,    250,
+  "lost10_rate",                   1500,    350,
+  "lost10_mod",                    1700,    350,
+  "lost10_results",                1900,    350,
+  "altitude10_rate",               1500,     50,
+  "altitude10_bay",                1700,     50,
+  "altitude10_results",             1900,     50,
   
   #Results
-  "mod_summary",                   2600,      0,
-  "mod_types",                     2600,    400,
+  "mod_summary",                   2300,      0,
+  "mod_types",                     2300,    400,
 )
 
 nodes <- vis_data$x$nodes |> 
