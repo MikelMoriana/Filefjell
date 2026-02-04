@@ -86,7 +86,7 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
 adj_label <- c(richness = "Species<br>richness", 
                new = "New<br>species", 
                lost = "Lost<br>species", 
-               elevation = "Uppermost<br>occurrence",
+               altitude = "Uppermost<br>occurrence",
                alpine = "Specialist",
                generalist = "Generalist",
                period1 = "1972–2008/09",
@@ -96,10 +96,7 @@ adj_label <- c(richness = "Species<br>richness",
                T7 = "Snowbed",
                T14 = "Ridge",
                T22 = "Mountain grassland\nand grass tundra",
-               T27 = "Boulderfield",
-               all = "All observations",
-               rem = "Species found at a summit<br>all three surveys",
-               newer = "New species receive a value<br>of 33 metres for the previous survey")
+               T27 = "Boulderfield")
 
 colour_mapping <-  list(
   period = c("period1" = "#859395", "period2" = "#f58800"),
@@ -201,6 +198,8 @@ gg_results <- function(data) {
            specialisation = factor(specialisation, levels = c("generalist", "alpine"))) |>
     ggplot(aes(x = Estimate, y = specialisation, colour = Period)) +
     theme_minimal() +
+    theme(panel.background = element_rect(fill = "white", colour = NA),
+          plot.background = element_rect(fill = "white", colour = NA)) +
     geom_vline(xintercept = 0, colour = "black") +
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
     geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = position_dodge(width = 0.6)) +
