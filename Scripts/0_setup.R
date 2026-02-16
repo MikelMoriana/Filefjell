@@ -35,8 +35,9 @@ options(scipen = 999)
 
 # Data cleaning----
 
-data_tidying <- function(data) {
+data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
   data %>%
+    # We tidy the data
     clean_names() %>%
     relocate(year) %>% 
     rename(any_of(c(summit = "top", weather = "vaer"))) %>%
@@ -45,8 +46,28 @@ data_tidying <- function(data) {
            across(any_of("weather"), ~ str_replace_all(.x, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))),
            across(any_of("recorder"), ~ str_replace_all(.x, c(" \\+ " = "_", "\\+" = "_"))),
            across(any_of("species"), ~ str_replace_all(.x, c(" " = "_", "\\." = "")))) %>%
-    mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Rjupeskareggen", "Krekanosi", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")))
+    # We correct the summit data
+    left_join(summit_data_tidy, by = "summit") %>%
+    select(!height) %>%
+    rename(height = correct_height) %>%
+    relocate(height:bedrock, .after = summit) %>%
+    # We update the names to the new nomenclature
+    mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo",
+                               species == "Cer_lan" ~ "Cer_alp_lan",
+                               species == "Jun_trif" ~ "Jun_tri",
+                               species == "Poa_x_jem" ~ "Poa_jem",
+                               species == "Sil_acu" ~ "Sil_aca",
+                               TRUE ~ species)) %>%
+    left_join(filefjell_species, by = "species") %>%
+    mutate(species = ifelse(!is.na(new_name), new_name, species)) %>%
+    relocate(c(specialisation, functional), .after = species) %>%
+    select(!new_name) %>%
+    # We set the order we are interested in
+    mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")),
+           specialisation = factor(specialisation, levels = c("alpine", "generalist"))) %>%
+    arrange(summit, year, species)
 }
+
 
 
 # Plotting----
@@ -92,11 +113,12 @@ adj_label <- c(richness = "Species<br>richness",
                period1 = "1972–2008/09",
                period2 = "2008/09–2024/25",
                T1 = "Bare rock",
-               T3 = "Mountain heath,\nleeside and tundra",
-               T7 = "Snowbed",
+               T27 = "Boulderfield",
                T14 = "Ridge",
-               T22 = "Mountain grassland\nand grass tundra",
-               T27 = "Boulderfield")
+               T3 = "Alpine heath,\nleeside and tundra",
+               T22 = "Alpine grassland\nand grass tundra",
+               T7 = "Snowbed",
+               V6 = "Wet snowbed")
 
 colour_mapping <-  list(
   period = c("period1" = "#859395", "period2" = "#f58800"),
@@ -149,7 +171,7 @@ mod_summary <- function(mod) {
     mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
            p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
     relocate(std.error, .after = estimate) %>%
-    rename(Period = period, specialisation = specialisation, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    rename(Period = period, Specialisation = specialisation, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
   emmeans_ft <-  emmeans_df %>%
@@ -195,8 +217,8 @@ mod_summary <- function(mod) {
 gg_results <- function(data) {
   data |> 
     mutate(Period = factor(Period, levels = c("period2", "period1")),
-           specialisation = factor(specialisation, levels = c("generalist", "alpine"))) |>
-    ggplot(aes(x = Estimate, y = specialisation, colour = Period)) +
+           Specialisation = factor(Specialisation, levels = c("generalist", "alpine"))) |>
+    ggplot(aes(x = Estimate, y = Period, colour = Specialisation)) +
     theme_minimal() +
     theme(panel.background = element_rect(fill = "white", colour = NA),
           plot.background = element_rect(fill = "white", colour = NA)) +
@@ -204,7 +226,7 @@ gg_results <- function(data) {
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
     geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = position_dodge(width = 0.6)) +
     scale_y_discrete(labels = adj_label) +
-    scale_colour_manual("Period", values = colour_mapping$period, labels = adj_label) +
+    scale_colour_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
     guides(colour = guide_legend(reverse = TRUE)) +
     theme(text = element_text(size = 14, family = "serif"),
           axis.title.x = element_text(hjust = 0.35),
