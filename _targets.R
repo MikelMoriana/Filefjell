@@ -17,7 +17,7 @@ tar_source("Scripts/0_setup.R")
 
 # List of targets:----
 list(
-  # Tidy files----
+  # Getting the files----
   tar_target(
     name = visit_dates_file,
     command = "data_raw/Visit_dates.csv",
@@ -35,36 +35,6 @@ list(
   tar_target(
     name = filefjell_1972_2009,
     command = read_csv2(filefjell_1972_2009_file)
-  ),
-  tar_target(
-    name = filefjell_1972_tidy,
-    command = filefjell_1972_2009 |>
-      filter(Year == 1972) |>
-      left_join(visit_dates |>
-                  select(!c(Year2:Data2)),
-                by = c("Summit", "Year")) |>
-      pivot_longer(cols = !c(Summit:Year, Date, Recorder),
-                   names_to = "species",
-                   values_to = "distance",
-                   values_drop_na = TRUE) |>
-      data_tidying() |>
-      arrange(summit, year, species)
-  ),
-  tar_target(
-    name = filefjell_2008_2009_tidy,
-    command = filefjell_1972_2009 |>
-      filter(Year == 2009) |>
-      select(!Year) |>
-      left_join(visit_dates |>
-                  filter(Year %in% c(2008, 2009)) |>
-                  select(!c(Year2:Data2)),
-                by = c("Summit")) |>
-      pivot_longer(cols = !c(Summit, Height, Year:Recorder),
-                   names_to = "species",
-                   values_to = "distance",
-                   values_drop_na = TRUE) |>
-      data_tidying() |>
-      arrange(summit, year, species)
   ),
   tar_target(
     name = filefjell_2024_file,
@@ -85,32 +55,6 @@ list(
     command = read_csv2(filefjell_2025_file)
   ),
   tar_target(
-    name = filefjell_2024_2025_tidy,
-    command = filefjell_2024 |>
-      select(c(Top:Altitude, Rareness)) |>
-      rbind(filefjell_2025 |>
-              select(!Type) |>
-              mutate(Rareness = NA)) |>
-      data_tidying() |>
-      mutate(distance = height - altitude) |>
-      select(!altitude) |>
-      relocate(distance, .after = species) |>
-      mutate(rareness = ifelse(rareness == "–", NA, rareness)) |>
-      arrange(summit, year, species)
-  ),
-  tar_target(
-    name = type_species_tidy,
-    command = filefjell_2024 |>
-      select(c(Top:Species, Type, Comments, `Svar Mikel`)) |>
-      rbind(filefjell_2025 |>
-              select(c(Top:Species, Type)) |>
-              mutate(Comments = NA, `Svar Mikel` = NA)) |>
-      data_tidying() |>
-      mutate(main_type = str_extract(type, "[^C]*")) |>
-      relocate(main_type, .before = type) |>
-      arrange(summit, year, species)
-  ),
-  tar_target(
     name = polygones_file,
     command = "data_raw/Filefjell_polygones.csv",
     format = "file"
@@ -118,35 +62,6 @@ list(
   tar_target(
     name = polygones,
     command = read_csv2(polygones_file)
-  ),
-  tar_target(
-    name = polygones_tidy,
-    command = polygones |>
-      clean_names() |>
-      select(fid, kartleggin, layer, area_m2) |>
-      mutate(year = 2024) |>
-      relocate(year) |>
-      rename(summit = layer) |>
-      relocate(summit) |>
-      mutate(summit = str_replace(summit, "_NiN3", "")) |>
-      left_join(filefjell_2024_2025_tidy |>
-                  select(summit, date, weather) |>
-                  distinct(),
-                by = "summit") |>
-      relocate(c(date, weather), .after = year) |>
-      mutate(recorder = "Helene") |>
-      relocate(recorder, .after = weather) |>
-      rename(type = kartleggin) |>
-      mutate(type = str_replace(type, "-", ""))
-  ),
-  tar_target(
-    name = polygones_cover,
-    command = polygones_tidy |>
-      summarise(.by = c(summit:recorder, type), area_m2 = sum(area_m2)) |>
-      group_by(summit) |>
-      mutate(percentage = 100 * area_m2 / sum(area_m2)) |>
-      ungroup() |>
-      select(!area_m2)
   ),
   tar_target(
     name = type_cover_file,
@@ -158,20 +73,13 @@ list(
     command = read_csv2(type_cover_file)
   ),
   tar_target(
-    name = type_cover_tidy,
-    command = type_cover |>
-      data_tidying() |>
-      mutate(type = ifelse(type == "Naken berg", "T1", type))
+    name = filefjell_species_file,
+    command = "data_raw/Filefjell_species.csv",
+    format = "file"
   ),
   tar_target(
-    name = maintype_cover_tidy,
-    command = type_cover_tidy |>
-      rbind(polygones_cover |>
-              mutate(comments = NA)) |>
-      mutate(main_type = str_extract(type, "[^C]*")) |>
-      relocate(main_type, .before = type) |>
-      summarise(.by = c(year, summit, date, weather, recorder, main_type),
-                percentage = sum(percentage))
+    name = filefjell_species,
+    command = read_csv2(filefjell_species_file)
   ),
   tar_target(
     name = summit_data_file,
@@ -187,105 +95,143 @@ list(
     command = summit_data |>
       clean_names() |>
       mutate(summit = str_replace_all(summit, " ", "_")) |>
-      rename(summit_hectare = area) |>
-      mutate(summit_decare = 10 * summit_hectare) |>
-      relocate(summit_decare, .after = summit_hectare)
+      rename(correct_height = height) |>
+      rename(summit_hectare = area)
   ),
-  tar_target(
-    name = filefjell_species_file,
-    command = "data_raw/Filefjell_species.csv",
-    format = "file"
-  ),
-  tar_target(
-    name = filefjell_species,
-    command = read_csv2(filefjell_species_file)
-  ),
-  # Clean files----
+  # One file for each survey----
   tar_target(
     name = filefjell_1972_clean,
-    command = filefjell_1972_tidy |>
-      left_join(summit_data_tidy |>
-                  select(summit, height) |>
-                  rename(height_correct = height),
-                by = "summit") |>
-      select(!height) |>
-      rename(height = height_correct) |>
-      relocate(height, .after = summit) |>
-      mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan",
-                                 species == "Jun_trif" ~ "Jun_tri",
-                                 species == "Poa_x_jem" ~ "Poa_jem",
-                                 species == "Sil_acu" ~ "Sil_aca",
-                                 TRUE ~ species))
+    command = filefjell_1972_2009 |>
+      filter(Year == 1972) |>
+      left_join(visit_dates |>
+                  select(!c(Year2:Data2)),
+                by = c("Summit", "Year")) |>
+      pivot_longer(cols = !c(Summit:Year, Date, Recorder),
+                   names_to = "species",
+                   values_to = "distance",
+                   values_drop_na = TRUE) |>
+      data_cleaning(summit_data_tidy = summit_data_tidy,
+                    filefjell_species = filefjell_species)
   ),
   tar_target(
     name = filefjell_2008_2009_clean,
-    command = filefjell_2008_2009_tidy |>
-      left_join(summit_data_tidy |>
-                  select(summit, height) |>
-                  rename(height_correct = height),
-                by = "summit") |>
-      select(!height) |>
-      rename(height = height_correct) |>
-      relocate(height, .after = summit) |>
-      mutate(species = case_when(species == "Cer_lan" ~ "Cer_alp_lan",
-                                 species == "Jun_trif" ~ "Jun_tri",
-                                 species == "Poa_x_jem" ~ "Poa_jem",
-                                 species == "Sil_acu" ~ "Sil_aca",
-                                 TRUE ~ species))
+    command = filefjell_1972_2009 |>
+      filter(Year == 2009) |>
+      select(!Year) |>
+      left_join(visit_dates |>
+                  filter(Year %in% c(2008, 2009)) |>
+                  select(!c(Year2:Data2)),
+                by = c("Summit")) |>
+      pivot_longer(cols = !c(Summit, Height, Year:Recorder),
+                   names_to = "species",
+                   values_to = "distance",
+                   values_drop_na = TRUE) |>
+      data_cleaning(summit_data_tidy = summit_data_tidy,
+                    filefjell_species = filefjell_species)
   ),
   tar_target(
     name = filefjell_2024_2025_clean,
-    command = filefjell_2024_2025_tidy |>
-      left_join(summit_data_tidy |>
-                  select(summit, height) |>
-                  rename(height_correct = height),
-                by = "summit") |>
-      select(!height) |>
-      rename(height = height_correct) |>
-      relocate(height, .after = summit) |>
-      mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo",
-                                 TRUE ~ species))
+    command = filefjell_2024 |>
+      rbind(filefjell_2025 |>
+              mutate(Rareness = NA,
+                     Comments = NA,
+                     Svar_Mikel = NA)) |>
+      mutate(Year = ifelse(Top == "Storeknippa", 2024, Year)) |>
+      mutate(Distance = Height - Altitude) |>
+      select(!Altitude) |>
+      relocate(Distance, .after = Species) |>
+      data_cleaning(summit_data_tidy = summit_data_tidy,
+                    filefjell_species = filefjell_species)
   ),
+  # Habitat cover----
+  tar_target(
+    name = polygones_tidy,
+    command = polygones |>
+      clean_names() |>
+      select(fid, kartleggin, layer, area_m2) |>
+      rename(summit = layer) |>
+      relocate(summit) |>
+      mutate(summit = str_replace(summit, "_NiN3", "")) |>
+      rename(type = kartleggin) |>
+      mutate(type = str_replace(type, "-", "")) |>
+      summarise(.by = c(summit, type), area_m2 = sum(area_m2)) |>
+      group_by(summit) |>
+      mutate(percentage = 100 * area_m2 / sum(area_m2)) |>
+      ungroup() |>
+      select(!area_m2) |>
+      mutate(group = case_when(grepl("T1C", type) | grepl("Naken", type) ~ "T1",
+                               grepl("T27", type) ~ "T27",
+                               .default = type)) |>
+      summarise(.by = c(summit, group), percentage = sum(percentage))
+  ),
+  tar_target(
+    name = type_tidy,
+    command = type_cover |>
+      clean_names() |>
+      mutate(summit = str_replace_all(summit, " ", "_")) |>
+      select(summit, type, percentage) |>
+      mutate(type = ifelse(type == "Naken berg", "T1", type)) |>
+      mutate(group = case_when(grepl("T1C", type) | grepl("Naken", type) ~ "T1",
+                               grepl("T27", type) ~ "T27",
+                               .default = type)) |>
+      summarise(.by = c(summit, group), percentage = sum(percentage))
+  ),
+  tar_target(
+    name = types_with_species,
+    command = filefjell_2024_2025_clean |>
+      select(summit, type) |>
+      distinct() |>
+      mutate(group = case_when(grepl("T1C", type) | grepl("Naken", type) ~ "T1",
+                               grepl("T27", type) ~ "T27",
+                               .default = type)) |>
+      select(summit, group) |>
+      distinct()
+  ),
+  tar_target(
+    name = habitat_cover,
+    command = types_with_species |>
+      full_join(polygones_tidy, by = c("summit", "group")) |>
+      rename(percentage1 = percentage) |>
+      full_join(type_tidy, by = c("summit", "group")) |>
+      rename(percentage2 = percentage) |>
+      mutate(percentage = ifelse(is.na(percentage1), percentage2, percentage1)) |>
+      left_join(summit_data_tidy |>
+                  select(summit, summit_hectare),
+                by = "summit") |>
+      mutate(group_decare = percentage * summit_hectare / 10,
+             group_decare = ifelse(is.na(group_decare), 0.25, group_decare),
+             habitat = str_extract(group, "[^C]*"),
+             habitat = ifelse(grepl("V", habitat), "V6", habitat)) |>
+      summarise(.by = c(summit, habitat), habitat_decare = sum(group_decare)) |>
+      mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")),
+             habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T3", "T22", "T7", "V6"))) |>
+      arrange(summit, habitat)
+  ),
+  # Clean files----
   tar_target(
     name = filefjell_data_clean,
     command = filefjell_1972_clean |>
       rbind(filefjell_2008_2009_clean) |>
-      mutate(weather = NA,
-             rareness = NA) |>
+      mutate(weather = NA) |>
       relocate(weather, .after = date) |>
-      rbind(filefjell_2024_2025_clean) |>
-      left_join(filefjell_species, by = "species") |>
-      mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
-      relocate(c(specialisation, functional), .after = species) |>
-      select(!new_name) |>
+      rbind(filefjell_2024_2025_clean |> select(!type:svar_mikel)) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
-      arrange(summit, year, species)
+      arrange(year, summit, specialisation, species)
   ),
   tar_target(
-    name = type_species_clean,
-    command = type_species_tidy |>
-      mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo",
-                                 TRUE ~ species)) |>
-      left_join(filefjell_species, by = "species") |>
-      mutate(species = ifelse(!is.na(new_name), new_name, species)) |>
-      relocate(c(specialisation, functional), .after = species) |>
-      select(!new_name) |>
-      left_join(maintype_cover_tidy |>
-                  select(summit, main_type, percentage),
-                by = c("summit", "main_type")) |>
-      relocate(percentage, .after = main_type) |>
-      left_join(summit_data_tidy |>
-                  select(summit, height, summit_decare) |>
-                  rename(height_correct = height),
-                by = "summit") |>
-      select(!height) |>
-      rename(height = height_correct) |>
-      mutate(habitat_decare = summit_decare * percentage / 100) |>
-      relocate(c(height, summit_decare), .after = summit) |>
-      relocate(habitat_decare, .after = percentage) |>
+    name = habitat_species_clean,
+    command = filefjell_2024_2025_clean |>
+      select(summit, type, species:functional) |>
+      mutate(habitat = str_extract(type, "[^C]*"),
+             habitat = ifelse(grepl("V", habitat), "V6", habitat)) |>
+      relocate(habitat, .before = type) |>
+      mutate(habitat = case_when(species %in% c("Eri_ang", "Eri_sch", "Eri_vag") ~ "V6",
+                                 .default = habitat)) |>
+      left_join(habitat_cover, by = c("summit", "habitat")) |>
+      mutate(habitat_decare = ifelse(habitat == "V6" & grepl("T", type), 0.25, habitat_decare)) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")),
-             main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7"))) |>
-      arrange(summit, year, species)
+             habitat = factor(habitat, levels = c("T1", "T27", "T14", "T3", "T22", "T7", "V6"))) |>
+      arrange(summit, habitat)
   ),
   # General datasets----
   tar_target(
@@ -306,7 +252,7 @@ list(
   tar_target(
     name = filefjell_simplified,
     command = filefjell_data_clean |>
-      select(!c(date:recorder, rareness)) |>
+      select(!c(date:recorder)) |>
       mutate(year = case_when(year == 1972 ~ "first",
                               year %in% c(2008, 2009) ~ "second",
                               year %in% c(2024, 2025) ~ "third"))
@@ -714,14 +660,14 @@ list(
       prior(exponential(3), class = "sd"),
       prior(gamma(2, 0.4), class = "nu"),
       # Sigma model (log-scale)
-      prior(normal(-1.098612, 0.5), class = "Intercept", dpar = "sigma"), 
+      prior(normal(-1.098612, 0.5), class = "Intercept", dpar = "sigma"),
       prior(normal(0, 0.3), class = "b", dpar = "sigma")
     )
   ),
   tar_target(
     name = altitude_bay,
     command = brm(
-      bf(rate ~ 
+      bf(rate ~
            period * specialisation + (1|summit) + (1|species),
          sigma ~ period),
       family = student(),
