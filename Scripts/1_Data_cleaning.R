@@ -17,7 +17,7 @@ polygones <- read_csv2("data_raw/Filefjell_polygones.csv")
 
 
 
-# We tidy the summit data. We use heights from Norgeskart as standard
+# We tidy the summit data. We use summit elevations from Norgeskart
 
 summit_data_tidy <- summit_data |>
   clean_names() |>
@@ -27,7 +27,8 @@ summit_data_tidy <- summit_data |>
 
 
 
-# We check for different naming conventions----
+# Species names----
+## We check what species names are found in some of the surveys but not the others, and evaluate whether these are actually different species or different nomenclature or typos
 
 filefjell_1972_2009_species <- filefjell_1972_2009 |>
   pivot_longer(cols = !c(Summit, Height, Year), names_to = "Species", values_to = "Distance") |>
@@ -56,6 +57,7 @@ species_lost
 species_new
 # Agr_cap, Alc_sp, Cal_phr, Car_sax, Cer_alp_lan, Gen_niv, Jun_tri, Lyc_ann, Lyc_cla, Poa_jem, Sal_sp, Sil_aca, Vah_atr
 
+
 # In 2009 the Alchemilla found (not alpina) was called glomerulans. In 2024 we decided to call it sp. We reckon it is the same species, so we call it Alc glo in 2024 and 2025 as well
 # In 2009 Cerastium alpinum ssp. lanatum was shortened to Cer lan, while in 2024 it was shortened to Cer_alp_lan. We use the latter
 # In 2009 Juncus trifidus was shortened to Jun trif, while in 2024 it was shortened to Jun_tri. We use the latter
@@ -63,8 +65,10 @@ species_new
 # Sal phy was found in Graveggi in 2009, but not in the resampling. An unidentified Salix was found in Unnamed in 2024. Could have been phy, but not sure. And it was a different summit quite far from the other anyways. We keep them as they are
 # In 2009 Silene acaulis was shortened to Sil acu, while in 2024 it was shortened to Sil_aca. We use the latter
 
+
 # 5 species have disappeared from the dataset: Arc uva, Ger syl, Luz fri, Sal phy and Sil wah
 # 8 species have appeared: Agr cap, Cal phr, Car sax, Gen niv, Lyc ann, Lyc cla, Vah atr and  Sal sp (maybe same as Sal phy, but in a different summit anyways)
+
 
 # We have to double-check where the different Eriophorum species were registered
 
@@ -76,6 +80,8 @@ eriophorum <- filefjell_2024 |>
 # Eriophorum was found in "wetland" areas created by the extremely late snowmelt, or pockets within other habitats where the snow had stayed long. This is habitat V6
 
 # In unnamed, many species were registered as in snowbed. However, the estimation of the habitat's cover did not include snowbeds. This was because all these snowbeds were just small patches between the boulders
+
+
 
 # We create one file for each survey----
 
@@ -109,7 +115,7 @@ filefjell_2024_2025_clean <- filefjell_2024 |>
   rbind(filefjell_2025 |>
           mutate(Rareness = NA,
                  Comments = NA,
-                 Svar_Mikel = NA)) |>
+                 Svar = NA)) |>
   # For simplicity's sake, we assume the species found in Storeknippa in 2025 were in the exact same location in 2024
   mutate(Year = ifelse(Top == "Storeknippa", 2024, Year)) |>
   # We calculate distance
@@ -224,7 +230,7 @@ filefjell_data_clean <- filefjell_1972_clean |>
   rbind(filefjell_2008_2009_clean) |>
   mutate(weather = NA) |>
   relocate(weather, .after = date) |>
-  rbind(filefjell_2024_2025_clean |> select(!type:svar_mikel))
+  rbind(filefjell_2024_2025_clean |> select(!type:svar))
 
 habitat_species_clean <- filefjell_2024_2025_clean |>
   select(summit, type, species:functional) |>
