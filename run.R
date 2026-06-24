@@ -57,12 +57,13 @@ manual_positions <- tribble(
   "summit_periods",                1300,   -100,
   
   # Status
-  "status_survey",                 1300,   -550,
-  "header_map",                    1400,   -600,
-  "status_survey_ft",              1500,   -550,
-  "status_spe_survey",             1300,   -450,
-  "header_spe_map",                1400,   -500,
-  "status_spe_survey_ft",          1500,   -450,
+  "status",                        1300,   -450,
+  "flows_all",                     1500,   -400,
+  "strata",                        1500,   -500,
+  "lodes_12",                      1700,   -450,
+  "lodes_23",                      1700,   -350,
+  "species_records_manually",      1500,   -600,
+  "species_records_plot",          1900,   -500,
   
   # Richness rate
   "richness",                      1300,   -350,
@@ -70,8 +71,9 @@ manual_positions <- tribble(
   "richness_mod",                  1700,   -350,
   "richness_results",              1900,   -350,
   
-  # New species
   "turnover",                      1300,   -200,
+  
+  # New species
   "new_rate",                      1500,   -250,
   "new_mod",                       1700,   -250,
   "new_results",                   1900,   -250,
@@ -81,27 +83,22 @@ manual_positions <- tribble(
   "lost_mod",                      1700,   -150,
   "lost_results",                  1900,   -150,
   
-  # Altitude change
-  "altitude_rate",                 1500,    -50,
-  "priors_t",                      1600,      0,
-  "altitude_bay",                  1700,    -50,
-  "altitude_results",              1900,    -50,
+  # Original - Lost species
+  "original_lost",                 1400,    -50,  
+  "orilost_rate",                  1500,    -50,
+  "orilost_mod",                   1700,    -50,
+  "orilost_results",               1900,    -50,
   
-  # Top 10 metres
-  "richness10",                    1300,    150,
-  "richness10_rate",               1500,    150,
-  "richness10_mod",                1700,    150,
-  "richness10_results",            1900,    150,
-  "turnover10",                    1300,    300,
-  "new10_rate",                    1500,    250,
-  "new10_mod",                     1700,    250,
-  "new10_results",                 1900,    250,
-  "lost10_rate",                   1500,    350,
-  "lost10_mod",                    1700,    350,
-  "lost10_results",                1900,    350,
-  "altitude10_rate",               1500,     50,
-  "altitude10_bay",                1700,     50,
-  "altitude10_results",             1900,     50,
+  # Winners
+  "new_lost",                      1500,     50,
+  "winners",                       1700,     50,
+  "winners_ft",                    1900.     50.
+  
+  # Altitude change
+  "altitude_rate",                 1500,    150,
+  "priors_t",                      1600,    250,
+  "altitude_bay",                  1700,    150,
+  "altitude_results",              1900,    150,
   
   #Results
   "mod_summary",                   2300,      0,
@@ -110,7 +107,7 @@ manual_positions <- tribble(
 
 nodes <- vis_data$x$nodes |> 
   left_join(manual_positions, by = "name") |> 
-  mutate(hidden = ifelse(name %in% c("adj_label", "backwards_selection", "colour_mapping", "data_tidying", "gg_modvars", "gg_results", "gg_yearline", "model_diagnosis", "model_distribution", "model_homoscedasticity", "optimizer", "remove_terms"), TRUE, FALSE))
+  mutate(hidden = ifelse(name %in% c("adj_label", "alluvial_palette", "backwards_selection", "colour_mapping", "data_tidying", "gg_modvars", "gg_results", "gg_yearline", "model_diagnosis", "model_distribution", "model_homoscedasticity", "optimizer", "remove_terms"), TRUE, FALSE))
 
 visNetwork(nodes, edges) |> 
   visNodes() |> 
