@@ -135,7 +135,7 @@ list(
       rbind(filefjell_2025 |>
               mutate(Rareness = NA,
                      Comments = NA,
-                     Svar_Mikel = NA)) |>
+                     Svar = NA)) |>
       mutate(Year = ifelse(Top == "Storeknippa", 2024, Year)) |>
       mutate(Distance = Height - Altitude) |>
       select(!Altitude) |>
@@ -214,7 +214,7 @@ list(
       rbind(filefjell_2008_2009_clean) |>
       mutate(weather = NA) |>
       relocate(weather, .after = date) |>
-      rbind(filefjell_2024_2025_clean |> select(!type:svar_mikel)) |>
+      rbind(filefjell_2024_2025_clean |> select(!type:svar)) |>
       mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
       arrange(year, summit, specialisation, species)
   ),
@@ -259,204 +259,234 @@ list(
   ),
   # Status overview----
   tar_target(
-    name = status_survey,
+    name = status,
     command = filefjell_simplified |>
-      pivot_wider(names_from = year, values_from = distance) |>
-      mutate(status1 = case_when(!is.na(first) ~ "1972Present",
-                                 is.na(first) ~ "1972Absent")) |>
-      mutate(status2 = case_when(!is.na(first) & !is.na(second) ~ "2009Remained",
-                                 !is.na(first) & is.na(second) ~ "2009Lost",
-                                 is.na(first) & !is.na(second) ~ "2009New",
-                                 is.na(first) & is.na(second) ~ "2009Absent")) |>
-      mutate(status3 = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "2024Remained",
-                                 !is.na(first) & !is.na(second) & is.na(third) ~ "2024Lost",
-                                 !is.na(first) & is.na(second) & !is.na(third) ~ "2024Reappeared",
-                                 !is.na(first) & is.na(second) & is.na(third) ~ "2024Stayed_lost",
-                                 is.na(first) & !is.na(second) & !is.na(third) ~ "2024Stayed",
-                                 is.na(first) & !is.na(second) == 1 & is.na(third) ~ "2024Disappeared",
-                                 is.na(first) & is.na(second) & !is.na(third) ~ "2024New")) |>
-      select(status1:status3) |>
-      pivot_longer(cols = status1:status3, names_to = "survey", values_to = "status") |>
-      summarise(.by = "status", total = n()) |>
-      arrange(status)
+      select(year, summit, species) |>
+      mutate(presence = 1) |>
+      pivot_wider(names_from = year, values_from = presence, values_fill = 0)
   ),
   tar_target(
-    name = header_map,
-    command = tibble(
-      col_keys = c("1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
-      level1   = c("1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
+    name = flows_all,
+    command = status |>
+      mutate(type12 = case_when(first  == 1 & second == 1 ~ "Remained",
+                                first  == 1 & second == 0 ~ "Lost",
+                                first  == 0 & second == 1 ~ "New",
+                                first  == 0 & second == 0 ~ "Absent"),
+             type23 = case_when(second == 1 & third  == 1 ~ "Remained",
+                                second == 1 & third  == 0L ~ "Lost",
+                                second == 0 & third  == 1 ~ "New",
+                                second == 0 & third == 0 ~ "Absent")) |>
+      count(first, second, third, type12, type23, name = "n") |>
+      mutate(flow_id = row_number(),
+             type12 = factor(type12, levels = c("Remained","Lost","New","Absent")),
+             type23 = factor(type23, levels = c("Remained","Lost","New","Absent")))
+  ),
+  tar_target(
+    name = lodes_12,
+    command = flows_all |>
+      select(flow_id, n, first, second, type12) |>
+      ggalluvial::to_lodes_form(axes    = c("first","second"),
+                                key     = "x",
+                                value   = "stratum",
+                                id      = "flow_id",
+                                weight  = "n",
+                                discern = TRUE) |>
+      rename(survey = x) |>
+      mutate(x = recode(survey, first = 1, second = 2.38),
+             stratum = case_when(flow_id == 7 & survey == "first" ~ 7,
+                                 flow_id == 6 & survey == "first" ~ 6,
+                                 flow_id == 5 & survey == "first" ~ 5,
+                                 flow_id == 4 & survey == "first" ~ 4,
+                                 flow_id == 3 & survey == "first" ~ 3,
+                                 flow_id == 2 & survey == "first" ~ 2,
+                                 flow_id == 1 & survey == "first" ~ 1,
+                                 flow_id == 7 & survey == "second" ~ 7, # 7
+                                 flow_id == 6 & survey == "second" ~ 6, # 6
+                                 flow_id == 5 & survey == "second" ~ 3, # 3
+                                 flow_id == 4 & survey == "second" ~ 2, # 2
+                                 flow_id == 3 & survey == "second" ~ 5, # 5
+                                 flow_id == 2 & survey == "second" ~ 4, # 4
+                                 flow_id == 1 & survey == "second" ~ 1), # 1
+             stratum = factor(stratum, levels = c(1, 2, 3, 4, 5, 6, 7)),
+             type    = type12,
+             n = case_when(type == "New" & survey == "first" ~ 0,
+                           type == "Absent" ~ 0,
+                           TRUE ~ n),
+             alpha_group = case_when(flow_id %in% c(2, 4, 6) ~ "light",
+                                     TRUE ~ "dark")) |>
+      select(flow_id, x, stratum, n, type, alpha_group)
+  ),
+  tar_target(
+    name = lodes_23,
+    command =  flows_all |>
+      select(flow_id, n, second, third, type23) |>
+      ggalluvial::to_lodes_form(axes = c("second","third"),
+                                key = "x",
+                                value = "stratum",
+                                id = "flow_id",
+                                weight = "n",
+                                discern = TRUE) |>
+      rename(survey = x) |>
+      mutate(x = recode(survey, second = 2.38, third = 3),
+             stratum = case_when(flow_id == 7 & survey == "second" ~ 7, # 7
+                                 flow_id == 6 & survey == "second" ~ 6, # 6
+                                 flow_id == 5 & survey == "second" ~ 3, # 3
+                                 flow_id == 4 & survey == "second" ~ 2, # 2
+                                 flow_id == 3 & survey == "second" ~ 5, # 5
+                                 flow_id == 2 & survey == "second" ~ 4, # 4
+                                 flow_id == 1 & survey == "second" ~ 1, # 1
+                                 flow_id == 7 & survey == "third" ~ 7, # 7
+                                 flow_id == 6 & survey == "third" ~ 3, # 3
+                                 flow_id == 5 & survey == "third" ~ 5, # 5
+                                 flow_id == 4 & survey == "third" ~ 1, # 1
+                                 flow_id == 3 & survey == "third" ~ 6, # 6
+                                 flow_id == 2 & survey == "third" ~ 2, # 2
+                                 flow_id == 1 & survey == "third" ~ 4), # 4
+             stratum = factor(stratum, levels = c(1, 2, 3, 4, 5, 6, 7)),
+             type = type23,
+             n = case_when(flow_id == 1 & survey == "second" ~ 0,
+                           TRUE ~ n),
+             alpha_group = case_when(flow_id %in% c(3, 5) ~ "light",
+                                     TRUE ~ "dark")) |>
+      select(flow_id, x, stratum, n, type, alpha_group)
+  ),
+  tar_target(
+    name = strata,
+    command = bind_rows(
+      status |>
+        mutate(x = 1,
+               stratum = factor(first, levels = c(0, 1))) |>
+        count(x, stratum, name = "n"),
+      status |>
+        mutate(x = 2.38,
+               stratum = factor(second, levels = c(0, 1))) |>
+        count(x, stratum, name = "n"),
+      status |>
+        mutate(x = 3,
+               stratum = factor(third, levels = c(0, 1))) |>
+        count(x, stratum, name = "n")) |>
+      mutate(strata_fill = ifelse(stratum == 1, "#4DAF4A", "white"))
+  ),
+  tar_target(
+    name = species_records_manually,
+    command = tribble(
+      ~x,     ~y,      ~label,
+      1.690,  820.0, "Period 1",
+      2.690,  820.0, "Period 2",
+      0.930,  188.0,      "376",
+      2.310,  177.5,      "355",
+      2.310,  496.0,      "282",
+      2.325,  680.0,       "21",
+      3.070,  170.5,      "341",
+      3.070,  453.5,      "225",
+      3.055,  573.0,       "14",
+      3.070,  639.0,      "118",
+      3.055,  705.0,       "14",
+      3.055,  740.5,       "57",
+      3.040,  776.0,        "7"
     )
   ),
   tar_target(
-    name = status_survey_ft,
-    command = tibble(
-      "1972status" = c("Present",
-                       rep("", 6),
-                       "Total present"),
-      "1972total" = c(status_survey |> filter(status == "1972Present") |> pull(total),
-                      rep("", 6),
-                      status_survey |> filter(status == "1972Present") |> pull(total)),
-      "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present"),
-      "2008/09total" = c(status_survey |> filter(status == "2009Remained") |> pull(total), "",
-                         status_survey |> filter(status == "2009Lost") |> pull(total), "",
-                         status_survey |> filter(status == "2009New") |> pull(total), "", "",
-                         (status_survey |> filter(status == "2009Remained") |> pull(total)) + (status_survey |> filter(status == "2009New") |> pull(total))),
-      "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
-      "2024/25total" = c(status_survey |> filter(status == "2024Remained") |> pull(total),
-                         status_survey |> filter(status == "2024Lost") |> pull(total),
-                         status_survey |> filter(status == "2024Reappeared") |> pull(total),
-                         status_survey |> filter(status == "2024Stayed_lost") |> pull(total),
-                         status_survey |> filter(status == "2024Stayed") |> pull(total),
-                         status_survey |> filter(status == "2024Disappeared") |> pull(total),
-                         status_survey |> filter(status == "2024New") |> pull(total),
-                         (status_survey |> filter(status == "2024Remained") |> pull(total)) + (status_survey |> filter(status == "2024Reappeared") |> pull(total)) + (status_survey |> filter(status == "2024Stayed") |> pull(total)) + (status_survey |> filter(status == "2024New") |> pull(total)))
-    ) |>
-      flextable() |>
-      set_header_df(mapping = header_map, key = "col_keys") |>
-      merge_h(part = "header") |>
-      bg(part = "header", bg = "black") |>
-      color(part = "header", color = "white") |>
-      bold(part = "header") |>
-      align(part = "header", align = "center") |>
-      bg(part = "body", bg = "white") |>
-      color(part = "body", color = "black") |>
-      bg(part = "body", i = 8, bg = "grey") |>
-      hline(i = 4) |>
-      hline(i = 2, j = 3:6) |>
-      hline(i = 6, j = 3:6) |>
-      hline(i = 7) |>
-      border(i = c(1:6, 8), j = 3, border.left = officer::fp_border(color = "black")) |>
-      border(i = 1:8, j = 5, border.left = officer::fp_border(color = "black")) |>
-      border(part = "header", border.left = officer::fp_border(color = "white")) |>
-      vline_left() |>
-      vline_right() |>
-      align(part = "body", align = "left") |>
-      align(part = "body", j = c(2, 4, 6), align = "center") |>
-      flextable::font(part = "all", fontname = "Times New Roman") |>
-      autofit()
-  ),
-  tar_target(
-    name = status_spe_survey,
-    command = filefjell_simplified |>
-      pivot_wider(names_from = year, values_from = distance) |>
-      mutate(status1 = case_when(!is.na(first) ~ "1972Present",
-                                 is.na(first) ~ "1972Absent")) |>
-      mutate(status2 = case_when(!is.na(first) & !is.na(second) ~ "2009Remained",
-                                 !is.na(first) & is.na(second) ~ "2009Lost",
-                                 is.na(first) & !is.na(second) ~ "2009New",
-                                 is.na(first) & is.na(second) ~ "2009Absent")) |>
-      mutate(status3 = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "2024Remained",
-                                 !is.na(first) & !is.na(second) & is.na(third) ~ "2024Lost",
-                                 !is.na(first) & is.na(second) & !is.na(third) ~ "2024Reappeared",
-                                 !is.na(first) & is.na(second) & is.na(third) ~ "2024Stayed_lost",
-                                 is.na(first) & !is.na(second) & !is.na(third) ~ "2024Stayed",
-                                 is.na(first) & !is.na(second) == 1 & is.na(third) ~ "2024Disappeared",
-                                 is.na(first) & is.na(second) & !is.na(third) ~ "2024New")) |>
-      select(specialisation, status1:status3) |>
-      pivot_longer(cols = status1:status3, names_to = "survey", values_to = "status") |>
-      summarise(.by = c("specialisation", "status"), total = n()) |>
-      arrange(status)
-  ),
-  tar_target(
-    name = header_spe_map,
-    command = tibble(
-      col_keys = c("specialisation", "1972status", "1972total", "2008/09status", "2008/09total", "2024/25status", "2024/25total"),
-      level1   = c("Specialisation", "1972", "1972", "2008/09", "2008/09", "2024/25", "2024/25")
-    )
-  ),
-  tar_target(
-    name = status_spe_survey_ft,
-    command = tibble(
-      "specialisation" = c("Specialists",
-                           rep("", 7),
-                           "Generalists",
-                           rep("", 7)),
-      "1972status" = c("Present",
-                       rep("", 6),
-                       "Total specialists",
-                       "Present",
-                       rep("", 6),
-                       "Total generalists"),
-      "1972total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "1972Present") |> pull(total),
-                      rep("", 6),
-                      status_spe_survey |> filter(specialisation == "alpine" & status == "1972Present") |> pull(total),
-                      status_spe_survey |> filter(specialisation == "generalist" & status == "1972Present") |> pull(total),
-                      rep("", 6),
-                      status_spe_survey |> filter(specialisation == "generalist" & status == "1972Present") |> pull(total)),
-      "2008/09status" = c("Remained", "", "Lost", "", "New", "", "", "Total present",
-                          "Remained", "", "Lost", "", "New", "", "", "Total present"),
-      "2008/09total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "2009Remained") |> pull(total),
-                         "",
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2009Lost") |> pull(total),
-                         "",
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2009New") |> pull(total),
-                         "",
-                         "",
-                         (status_spe_survey |> filter(specialisation == "alpine" & status == "2009Remained") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2009New") |> pull(total)),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2009Remained") |> pull(total),
-                         "",
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2009Lost") |> pull(total),"
-                     ",
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2009New") |> pull(total),
-                         "",
-                         "",
-                         (status_spe_survey |> filter(specialisation == "generalist" & status == "2009Remained") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2009New") |> pull(total))),
-      "2024/25status" = c("Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present",
-                          "Remained", "Lost", "Reappeared", "Did not reappear", "Remained", "Lost", "New", "Total present"),
-      "2024/25total" = c(status_spe_survey |> filter(specialisation == "alpine" & status == "2024Remained") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Lost") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Reappeared") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed_lost") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024Disappeared") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "alpine" & status == "2024New") |> pull(total),
-                         (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Remained") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Reappeared") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2024Stayed") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "alpine" & status == "2024New") |> pull(total)),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Remained") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Lost") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Reappeared") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed_lost") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024Disappeared") |> pull(total),
-                         status_spe_survey |> filter(specialisation == "generalist" & status == "2024New") |> pull(total),
-                         (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Remained") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Reappeared") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2024Stayed") |> pull(total)) +
-                           (status_spe_survey |> filter(specialisation == "generalist" & status == "2024New") |> pull(total)))
-    ) |>
-      flextable() |>
-      set_header_df(mapping = header_spe_map, key = "col_keys") |>
-      merge_h(part = "header") |>
-      bg(part = "header", bg = "black") |>
-      color(part = "header", color = "white") |>
-      bold(part = "header") |>
-      align(part = "header", j = 2:7, align = "center") |>
-      bg(part = "body", bg = "white") |>
-      color(part = "body", color = "black") |>
-      bg(part = "body", i = c(8, 16), bg = "grey") |>
-      hline(i = c(4, 12), j = 2:7) |>
-      hline(i = c(2, 10), j = 4:7) |>
-      hline(i = c(6, 14), j = 4:7) |>
-      border(i = 8, border.bottom = officer::fp_border(width = 2)) |>
-      border(i = c(1:6, 8, 9:14, 16), j = 4, border.left = officer::fp_border(color = "black")) |>
-      border(i = 1:16, j = c(2, 6), border.left = officer::fp_border(color = "black")) |>
-      border(part = "header", border.left = officer::fp_border(color = "white")) |>
-      vline_left() |>
-      vline_right() |>
-      align(part = "body", align = "left") |>
-      align(part = "body", j = c(3, 5, 7), align = "center") |>
-      flextable::font(part = "all", fontname = "Times New Roman") |>
-      autofit()
+    name = species_records_plot,
+    command = ggplot() +
+      geom_flow(data = lodes_12,
+                aes(x = x, alluvium = flow_id, y = n, stratum = stratum, fill = type),
+                alpha = 0.9,
+                width = 0,
+                knot.pos = 0.35,
+                curve_type = "cubic") +
+      geom_flow(data = lodes_23,
+                aes(x = x, alluvium = flow_id, y = n, stratum = stratum, fill = type, alpha = alpha_group),
+                width = 0,
+                knot.pos = 0.35,
+                curve_type = "cubic") +
+      geom_stratum(data  = strata |> filter(x %in% c(1, 2.38)),
+                   aes(x = x, y = n, stratum = stratum),
+                   alpha = 1,
+                   width = 0) +
+      geom_stratum(data  = strata |> filter(x %in% c(2.38, 3)),
+                   aes(x = x, y = n, stratum = stratum),
+                   alpha = 1,
+                   width = 0) +
+      geom_text(data = species_records_manually,
+                aes(x = x, y = y, label = label),
+                family = "serif", size = 4) +
+      scale_fill_manual(values = alluvial_palette,
+                        name   = "Between surveys") +
+      scale_alpha_manual(values = c("light" = 0.6, "dark" = 0.9)) +
+      guides(alpha = "none") +
+      scale_x_continuous(breaks = c(1, 2.38, 3),
+                         labels = c("1972", "2008/09", "2024/25"),
+                         expand = c(0.08, 0.05)) +
+      labs(x = NULL,
+           y = "Number of species records") +
+      theme_minimal(base_size = 12) +
+      theme(panel.grid.minor.x = element_blank(),
+            panel.grid.major.x = element_blank(),
+            axis.title.y = element_markdown(margin = margin(r = 10)),
+            legend.position = "top",
+            text = element_text(size = 14, family = "serif"))
   ),
   # Richness----
   tar_target(
     name = richness,
     command = filefjell_simplified |>
       summarise(.by = c(year, summit, specialisation), richness = n())
+  ),
+  tar_target(
+    name = richness_overview_specialisation,
+    command = richness |>
+      pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
+      mutate(change1 = case_when(second > first ~ "Increase",
+                                 second == first ~ "No change",
+                                 second < first ~ "Decrease"),
+             change2 = case_when(third > second ~ "Increase",
+                                 third == second ~ "No change",
+                                 third < second ~ "Decrease")) |>
+      arrange(summit)
+  ),
+  tar_target(
+    name = richness_summits_ft,
+    command = richness_overview_specialisation |>
+      select(!first:third) |>
+      pivot_wider(names_from = specialisation, values_from = change1:change2) |>
+      mutate(period1 = case_when(change1_alpine == "Increase" & change1_generalist == "Increase" ~ "++",
+                                 change1_alpine == "Increase" & change1_generalist == "Decrease" ~ "+-",
+                                 change1_alpine == "Decrease" & change1_generalist == "Increase" ~ "-+",
+                                 change1_alpine == "Decrease" & change1_generalist == "Decrease" ~ "--"),
+             period2 = case_when(change2_alpine == "Increase" & change2_generalist == "Increase" ~ "++",
+                                 change2_alpine == "Increase" & change2_generalist == "Decrease" ~ "+-",
+                                 change2_alpine == "No change" & change2_generalist == "Increase" ~ "0+",
+                                 change2_alpine == "Decrease" & change2_generalist == "Increase" ~ "-+",
+                                 change2_alpine == "Decrease" & change2_generalist == "Decrease" ~ "--")) |>
+      select(period1, period2) |>
+      pivot_longer(cols = period1:period2, names_to = "period", values_to = "change") |>
+      summarise(.by = c(period, change), total = n()) |>
+      pivot_wider(names_from = period, values_from = total, values_fill = 0) |>
+      mutate(alpine = str_sub(change, end = 1L),
+             generalist = str_sub(change, start = 2L, end = 2L),
+             alpine = case_when(alpine == "+" ~ "Increase",
+                                alpine == "0" ~ "No change",
+                                alpine == "-" ~ "Decrease"),
+             alpine = factor(alpine, levels = c("Increase", "No change", "Decrease")),
+             generalist = case_when(generalist == "+" ~ "Increase",
+                                    generalist == "0" ~ "No change",
+                                    generalist == "-" ~ "Decrease"),
+             generalist = factor(generalist, levels = c("Increase", "Decrease"))) |>
+      select(!change) |>
+      relocate(alpine, generalist) |>
+      arrange(alpine, generalist) |>
+      rename("Specialists" = alpine,
+             "Generalists" = generalist,
+             "1972-2008/09" = period1,
+             "2008/09-2024/25" = period2) |> 
+      clean_ft() |>
+      hline(i = c(2, 3), border = officer::fp_border(color = "grey")) |> 
+      merge_v(j = 1) |> 
+      align(j = 3:4, align = "center") |>
+      fontsize(part = "header", size = 12) |>
+      fontsize(part = "body", size = 11) |>
+      autofit()
   ),
   tar_target(
     name = richness_rate,
@@ -467,12 +497,12 @@ list(
       select(!c(first:third)) |>
       pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
       left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = change / time)
+      mutate(dec_rate = 10 * change / time)
   ),
   tar_target(
     name = richness_mod,
     command = glmmTMB(
-      rate ~
+      dec_rate ~
         period * specialisation + (1 | summit),
       dispformula = ~period,
       family = gaussian,
@@ -481,37 +511,6 @@ list(
   tar_target(
     name = richness_results,
     command = richness_mod |>
-      mod_summary()
-  ),
-  tar_target(
-    name = richness10,
-    command = filefjell_simplified |>
-      filter(distance <= 10) |>
-      summarise(.by = c(year, summit, specialisation), richness = n())
-  ),
-  tar_target(
-    name = richness10_rate,
-    command = richness10 |>
-      pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
-      mutate(period1 = second - first,
-             period2 = third - second) |>
-      select(!c(first:third)) |>
-      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
-      left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = change / time)
-  ),
-  tar_target(
-    name = richness10_mod,
-    command = glmmTMB(
-      rate ~
-        period * specialisation + (1 | summit),
-      dispformula = ~period,
-      family = gaussian,
-      data = richness10_rate)
-  ),
-  tar_target(
-    name = richness10_results,
-    command = richness10_mod |>
       mod_summary()
   ),
   # Turnover----
@@ -539,13 +538,14 @@ list(
     command = turnover |>
       filter(type == "new") |>
       left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = value / time)
+      mutate(dec_rate = 10 * value / time)
   ),
   tar_target(
     name = new_mod,
     command = glmmTMB(
-      rate ~
+      dec_rate ~
         period * specialisation + (1 | summit),
+      dispformula = ~period,
       family = gaussian,
       data = new_rate)
   ),
@@ -559,12 +559,12 @@ list(
     command = turnover |>
       filter(type == "lost") |>
       left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = value / time)
+      mutate(dec_rate = 10 * value / time)
   ),
   tar_target(
     name = lost_mod,
     command = glmmTMB(
-      rate ~
+      dec_rate ~
         period * specialisation + (1 | summit),
       dispformula = ~period,
       family = gaussian,
@@ -575,68 +575,107 @@ list(
     command = lost_mod |>
       mod_summary()
   ),
-  # Turnover 10m----
   tar_target(
-    name = turnover10,
-    command = filefjell_simplified |>
-      filter(distance <= 10) |>
-      pivot_wider(names_from = year, values_from = distance) |>
-      mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
-             new2 = ifelse(is.na(second) & !is.na(third), 1, 0),
-             lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
+    name = original_lost,
+    command = filefjell_simplified |> 
+      mutate(presence = ifelse(!is.na(distance), 1, 0)) |> 
+      select(!c(height:bedrock, distance)) |> 
+      pivot_wider(names_from = year, values_from = presence) |> 
+      filter(!is.na(first)) |> 
+      mutate(lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
              lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |>
       select(!c(first:third)) |>
       summarise(.by = c(summit, specialisation),
-                newperiod1 = sum(new1),
-                newperiod2 = sum(new2),
-                lostperiod1 = sum(lost1),
-                lostperiod2 = sum(lost2)) |>
-      pivot_longer(cols = c(newperiod1, newperiod2, lostperiod1, lostperiod2),
-                   names_to = c("type", "period"),
-                   names_pattern = "^(new|lost)(period\\d+)$",
-                   values_to = "value")
-  ),
-  tar_target(
-    name = new10_rate,
-    command = turnover10 |>
-      filter(type == "new") |>
+                period1 = sum(lost1),
+                period2 = sum(lost2)) |>
+      pivot_longer(cols = c(period1, period2),
+                   names_to = c("period"),
+                   values_to = "value") |>
       left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = value / time)
+      mutate(dec_rate = 10 * value / time)
   ),
   tar_target(
-    name = new10_mod,
+    name = orilost_modh,
     command = glmmTMB(
-      rate ~
+      dec_rate ~
         period * specialisation + (1 | summit),
       dispformula = ~period,
       family = gaussian,
-      data = new10_rate)
+      data = original_lost)
   ),
   tar_target(
-    name = new10_results,
-    command = new10_mod |>
+    name = orilost_results,
+    command = orilost_modh |>
       mod_summary()
   ),
+  # New and lost species----
   tar_target(
-    name = lost10_rate,
-    command = turnover10 |>
-      filter(type == "lost") |>
-      left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = value / time)
+    name = new_lost,
+    command = filefjell_simplified |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(status = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "remained",
+                                !is.na(first) & !is.na(second) & is.na(third) ~ "lost_2",
+                                !is.na(first) & is.na(second) & !is.na(third) ~ "reappeared",
+                                !is.na(first) & is.na(second) & is.na(third) ~ "lost_1",
+                                is.na(first) & !is.na(second) & !is.na(third) ~ "new_1",
+                                is.na(first) & !is.na(second) & is.na(third) ~ "redisappeared",
+                                is.na(first) & is.na(second) & !is.na(third) ~ "new_2")) |>
+      summarise(.by = c("species", "specialisation", "functional", "status"), total = n()) |>
+      mutate(status = factor(status, levels = c("remained", "new_1", "new_2", "reappeared", "redisappeared", "lost_1", "lost_2"))) |>
+      arrange(status) |>
+      pivot_wider(names_from = status, values_from = total, values_fill = 0) |>
+      arrange(species)
   ),
   tar_target(
-    name = lost10_mod,
-    command = glmmTMB(
-      rate ~
-        period * specialisation + (1 | summit),
-      dispformula = ~period,
-      family = gaussian,
-      data = lost10_rate)
+    name = winners,
+    command = new_lost |>
+      filter((new_1 + new_2) > 6 & (lost_1 + lost_2) < 2)
   ),
   tar_target(
-    name = lost10_results,
-    command = lost10_mod |>
-      mod_summary()
+    name = winners_ft,
+    command = winners |>
+      select(species, specialisation, remained:new_2) |>
+      arrange(specialisation) |>
+      mutate(dispersal = case_when(species == "Ant_dio" ~ "Wind",
+                                   species == "Ath_dis" ~ "Wind",
+                                   species == "Ave_fle" ~ "Wind",
+                                   species == "Cry_cri" ~ "Wind",
+                                   species == "Eri_ang" ~ "Wind",
+                                   species == "Eri_sch" ~ "Wind",
+                                   species == "Mic_ste" ~ "Water / Wind",
+                                   species == "Oma_nor" ~ "Wind",
+                                   species == "Ran_pyg" ~ "Water / Wind",
+                                   species == "Vac_myr" ~ "Birds",
+                                   species == "Vac_uli" ~ "Birds"),
+             species = case_when(species == "Ant_dio" ~ "Antennaria dioica",
+                                 species == "Ath_dis" ~ "Athyrium distentifolium",
+                                 species == "Ave_fle" ~ "Avenella flexuosa",
+                                 species == "Cry_cri" ~ "Cryptogramma crispa",
+                                 species == "Eri_ang" ~ "Eriophorum angustifolium",
+                                 species == "Eri_sch" ~ "Eriophorum scheuchzeri",
+                                 species == "Mic_ste" ~ "Micranthes stellaris",
+                                 species == "Oma_nor" ~ "Omalotheca norvegica",
+                                 species == "Ran_pyg" ~ "Ranunculus pygmaeus",
+                                 species == "Vac_myr" ~ "Vaccinium myrtillus",
+                                 species == "Vac_uli" ~ "Vaccinium uliginosum"),
+             specialisation = ifelse(specialisation == "alpine", "Specialist", "Generalist")) |>
+      relocate(c(dispersal, new_1, new_2), .after = specialisation) |>
+      clean_ft() |>
+      set_header_labels(species = "Species",
+                        specialisation = "Specialisation\nclass",
+                        dispersal = "Primary dispersal\nmechanism",
+                        new_1 = "# Summits new\n1972\u20132008/09",
+                        new_2 = "# Summits new\n2008/09\u20132024/25",
+                        remained = "# Summits remained\n1972\u20132024/25") |>
+      italic(part = "body", j = 1) |>
+      hline(i = 4) |>
+      align(part = "all", j = 4:6, align = "center") |>
+      autofit() |>
+      height(part = "header", height = 1) |>
+      hrule(part = "header", rule = "exact") |>
+      height(part = "body", height = 0.4) |>
+      hrule(part = "body", rule = "exact") |>
+      line_spacing(part = "header", space = 2)
   ),
   # Altitude----
   tar_target(
@@ -654,7 +693,7 @@ list(
   tar_target(
     name = priors_t,
     command = c(
-      # Mean model (as before)
+      # Mean model
       prior(normal(0, 0.5), class = "Intercept"),
       prior(normal(0, 0.5), class = "b"),
       prior(exponential(3), class = "sd"),
@@ -680,37 +719,6 @@ list(
   tar_target(
     name = altitude_results,
     command = altitude_bay |>
-      mod_summary()
-  ),
-  tar_target(
-    name = altitude10_rate,
-    command = filefjell_simplified |>
-      filter(distance <= 10) |>
-      pivot_wider(names_from = year, values_from = distance) |>
-      mutate(period1 = (second - first) * (-1),
-             period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
-      select(!c(first:third)) |>
-      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
-      filter(!is.na(change)) |>
-      left_join(summit_periods, by = c("summit", "period")) |>
-      mutate(rate = change / time)
-  ),
-  tar_target(
-    name = altitude10_bay,
-    command = brm(
-      bf(rate ~
-           period * specialisation + (1|summit) + (1|species),
-         sigma ~ period),
-      family = student(),
-      prior = priors_t,
-      data = altitude10_rate,
-      chains = 4, iter = 4000, seed = 811,
-      control = list(adapt_delta = 0.95)
-    )
-  ),
-  tar_target(
-    name = altitude10_results,
-    command = altitude10_bay |>
       mod_summary()
   )
   # # # New species per nature type----
