@@ -3,7 +3,7 @@
 source("Scripts/0_setup.R")
 
 
-# General Data----
+# General data----
 
 filefjell_data_clean <- tar_read(filefjell_data_clean)
 summit_data <- tar_read(summit_data_tidy)
@@ -1152,9 +1152,8 @@ rates_figure |> ggsave(file = "Results/Rates_emmeans_figure.png", width = 20, he
 
 
 # Nature type----
-### Data----
 
-# First new species. Do we find more in some habitats than others?
+## Habitat names
 
 habitat_species <- tar_read(habitat_species_clean)
 habitat_cover <- tar_read(habitat_cover)
@@ -1164,7 +1163,6 @@ new_species_2024_2025 <- filefjell_simplified |>
   filter(is.na(second) & !is.na(third)) |>
   mutate(status = "new") |>
   select(summit, species, status)
-
 
 habitat_names_ft <- habitat_cover |>
   select(habitat) |>
@@ -1197,88 +1195,44 @@ habitat_names_ft
 habitat_names_ft |> save_as_image(path = "Results/NiN_names.png", res = 300)
 
 
-# Habitat area
+## New species occurrences per habitat
 
-habsumm_area <- habitat_species |>
+hab_area <- habitat_species |>
   select(summit, habitat) |>
   distinct() |>
   full_join(habitat_cover, by = c("summit", "habitat")) |>
   mutate(habitat_decare = ifelse(is.na(habitat_decare), 0.25, habitat_decare)) |>
-  arrange(summit, habitat)
-
-hab_area <- habsumm_area |>
   summarise(.by = habitat, habitat_decare = sum(habitat_decare)) |>
   mutate(percentage = 100 * habitat_decare / sum(habitat_decare)) |>
   arrange(habitat)
 
-# New species per habitat AQUI!!!!!!!!!!!!
-
-habsumm_new_species <- habitat_species |>
+hab_new <- habitat_species |>
   left_join(new_species_2024_2025, by = c("summit", "species")) |>
   filter(status == "new") |>
   select(summit, habitat, specialisation, species) |>
-  arrange(summit, habitat, specialisation, species)
-
-habsumm_new_specialisation <- habsumm_new_species |>
-  summarise(.by = c(summit, habitat, specialisation), different = n()) |>
-  arrange(summit, habitat, specialisation)
-
-hab_new_observations <- habsumm_new_species |>
+  arrange(summit, habitat, specialisation, species) |>
   summarise(.by = c(habitat, specialisation), total = n()) |>
   arrange(habitat, specialisation)
 
-hab_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  distinct() |>
-  arrange(habitat, specialisation, species)
-
-hab_new_specialisation <- hab_new_species |>
-  summarise(.by = c(habitat, specialisation), different = n()) |>
-  arrange(habitat, specialisation)
-
-hab_area_new_observations_different <- hab_area |>
-  left_join(hab_new_observations |>
-              pivot_wider(names_from = specialisation, names_prefix = "obs_", values_from = total, values_fill = 0),
-            by = "habitat") |>
-  left_join(hab_new_specialisation |>
-              pivot_wider(names_from = specialisation, names_prefix = "new_", values_from = different, values_fill = 0),
-            by = "habitat") |>
-  mutate(rate = (obs_alpine + obs_generalist) / area)
-
-test3 <- habsumm_new_specialisation |>
-  left_join(habsumm_area, by = c("summit", "habitat")) |>
-  mutate(rate = different / habitat_decare) |>
-  summarise(.by = c(habitat, specialisation), mean_rate = mean(rate))
-
-
-habnewobs_ft <- hab_new_observations |>
+hab_new_prop <- hab_new |>
   pivot_wider(names_from = specialisation, values_from = total, values_fill = 0) |>
-  mutate(total = alpine + generalist) |>
-  relocate(total, .after = habitat) |>
-  left_join(hab_area, by = "habitat") |>
+  right_join(hab_area, by = "habitat") |>
+  mutate(across(alpine:generalist, ~ ifelse(is.na(.x), 0, .x)),
+         total_nr = alpine + generalist,
+         total_byha = total_nr / (habitat_decare / 10),
+         alpine_byha = alpine / (habitat_decare / 10),
+         generalist_byha = generalist / (habitat_decare / 10)) |>
   select(!habitat_decare) |>
-  mutate(habitat = factor(habitat, levels = c("T1", "T27", "T14", "T7", "V6", "T3", "T22"))) |>
-  arrange(habitat) |>
-  mutate(habitat = case_when(habitat == "T1" ~ "Bare rock",
-                             habitat == "T27" ~ "Boulder field",
-                             habitat == "T14" ~ "Ridge",
-                             habitat == "T7" ~ "Snowbed",
-                             habitat == "V6" ~ "Wet snowbed",
-                             habitat == "T3" ~ "Alpine heath",
-                             habitat == "T22" ~ "Alpine grassland"),
-         percentage = round(percentage, 1)) |>
-  rename("Habitat" = "habitat",
-         "Total new\noccurrences" = "total",
-         "Specialists" = "alpine",
-         "Generalists" = "generalist",
-         "% Total\nsummit area" = "percentage") |>
-  clean_ft() |>
-  align(part = "all", j = -1, align = "center") |>
-  autofit()
-habnewobs_ft
-habnewobs_ft |> save_as_image(path = "Results/New_habitat.png")
+  relocate(c(total_nr, total_byha), .after = habitat) |>
+  relocate(alpine_byha, .after = alpine) |>
+  relocate(generalist_byha, .after = generalist) |>
+  mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
+  arrange(habitat)
 
-habnew_obs_header <- tibble(
+
+## Table
+
+hab_new_header <- tibble(
   col_keys = c("habitat",
                "total",
                "total_nr",
@@ -1314,22 +1268,7 @@ habnew_obs_header <- tibble(
               "% Total\nsummit area")
 )
 
-habnewobs_prop <- hab_new_observations |>
-  pivot_wider(names_from = specialisation, values_from = total, values_fill = 0) |>
-  right_join(hab_area, by = "habitat") |>
-  mutate(across(alpine:generalist, ~ ifelse(is.na(.x), 0, .x)),
-         total_nr = alpine + generalist,
-         total_byha = total_nr / (habitat_decare / 10),
-         alpine_byha = alpine / (habitat_decare / 10),
-         generalist_byha = generalist / (habitat_decare / 10)) |>
-  select(!habitat_decare) |>
-  relocate(c(total_nr, total_byha), .after = habitat) |>
-  relocate(alpine_byha, .after = alpine) |>
-  relocate(generalist_byha, .after = generalist) |>
-  mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
-  arrange(habitat)
-
-habnewobs_prop_ft <- habnewobs_prop |>
+hab_new_prop_ft <- hab_new_prop |>
   mutate(habitat = case_when(habitat == "T1" ~ "Bare rock",
                              habitat == "T27" ~ "Boulder field",
                              habitat == "T13" ~ "Scree",
@@ -1342,7 +1281,7 @@ habnewobs_prop_ft <- habnewobs_prop |>
   rename("alpine_nr" = "alpine", "generalist_nr" = "generalist") |>
   flextable() |>
   separate_header() |>
-  set_header_df(habnew_obs_header) |>
+  set_header_df(hab_new_header) |>
   compose(part = "header", i = 2, j = c(3, 5, 7),
           value = as_paragraph("# / 10,000 m", as_sup("2"))) |>
   merge_h(part = "header", i = 1) |>
@@ -1358,14 +1297,17 @@ habnewobs_prop_ft <- habnewobs_prop |>
   fontsize(part = "header", size = 13) |>
   fontsize(part = "body", size = 12) |>
   autofit()
-habnewobs_prop_ft
-habnewobs_prop_ft |> save_as_image(path = "Results/New_prop_habitats.png", res = 300)
+hab_new_prop_ft
+hab_new_prop_ft |> save_as_image(path = "Results/New_prop_habitats.png", res = 300)
 
-habnewobs_prop_v <- hab_area |>
+
+## Figure
+
+hab_new_prop_v <- hab_area |>
   select(habitat) |>
   distinct() |>
-  crossing(specialisation = levels(hab_new_observations$specialisation)) |>
-  left_join(hab_new_observations, by = c("habitat", "specialisation")) |>
+  crossing(specialisation = levels(hab_new$specialisation)) |>
+  left_join(hab_new, by = c("habitat", "specialisation")) |>
   mutate(total = coalesce(total, 0)) |>
   left_join(hab_area, by = "habitat") |>
   mutate(total_byha = total / (habitat_decare / 10)) |>
@@ -1375,7 +1317,7 @@ habnewobs_prop_v <- hab_area |>
   arrange(habitat) |>
   mutate(across(where(is.numeric), ~ round(., 1)))
 
-habperc_gg <- hab_area |>
+hab_perc_gg <- hab_area |>
   mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
   ggplot() +
   geom_col(aes(x = habitat, y = percentage)) +
@@ -1390,7 +1332,7 @@ habperc_gg <- hab_area |>
         panel.grid.major.x = element_blank(),
         panel.grid.minor.y = element_blank())
 
-habnewobs_total_gg <- habnewobs_prop_v |>
+hab_new_total_gg <- hab_new_prop_v |>
   ggplot() +
   geom_col(aes(x = habitat, y = total, fill = specialisation)) +
   scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
@@ -1409,7 +1351,7 @@ habnewobs_total_gg <- habnewobs_prop_v |>
         legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)),
         legend.box.margin = margin(l = 180))
 
-habnewobs_prop_gg <- habnewobs_prop_v |>
+hab_new_prop_gg <- hab_new_prop_v |>
   ggplot() +
   geom_col(aes(x = habitat, y = total_byha, fill = specialisation)) +
   scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
@@ -1425,760 +1367,8 @@ habnewobs_prop_gg <- habnewobs_prop_v |>
         panel.grid.major.x = element_blank(),
         panel.grid.minor.y = element_blank())
 
-# habnewobs_gg <- ggarrange(habnewobs_total_gg, habnewobs_prop_gg,
-#           common.legend = TRUE)
-# habnewobs_gg
-# habnewobs_gg |> ggsave(filename = "New_species_per_habitat_figure.png", path = "Results", dpi = 300, width = 16.5, height = 10, units = "cm", bg = "white")
-
-
-habpercnew_gg <- ggarrange(habperc_gg, habnewobs_total_gg, habnewobs_prop_gg,
+hab_perc_new_gg <- ggarrange(hab_perc_gg, hab_new_total_gg, hab_new_prop_gg,
                            ncol = 3, align = "h", common.legend = TRUE)
-habpercnew_gg
-habpercnew_gg |> ggsave(filename = "New_species_per_habitat_figure_area.png", path = "Results", dpi = 300, width = 16.5, height = 10, units = "cm", bg = "white")
+hab_perc_new_gg
+hab_perc_new_gg |> ggsave(filename = "New_species_per_habitat_figure_area.png", path = "Results", dpi = 300, width = 16.5, height = 10, units = "cm", bg = "white")
 
-
-# horizontal chart
-
-habnewobs_total_gg_h <- habnewobs_prop_v |>
-  ggplot() +
-  geom_col(aes(x = total, y = habitat, fill = specialisation)) +
-  scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-  labs(title = "# new species occurrences",
-       x = NULL,
-       y = NULL) +
-  scale_y_discrete(labels = adj_label, limits = rev) +
-  theme_minimal() +
-  theme(text = element_text(size = 12, family = "serif"),
-        plot.title = element_text(size = 12, hjust = 0.5),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.y = element_blank(),
-        legend.position = "top",
-        legend.title = element_text(margin = margin(b = 5, r = 40)),
-        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
-
-habnewobs_prop_gg_h <- habnewobs_prop_v |>
-  ggplot() +
-  geom_col(aes(x = total_byha, y = habitat, fill = specialisation)) +
-  scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-  labs(title = expression("# new species occurrences / 10 000 m"^2),
-       x = NULL,
-       y = NULL) +
-  scale_y_discrete(labels = NULL, limits = rev) +
-  theme_minimal() +
-  theme(text = element_text(size = 12, family = "serif"),
-        plot.title = element_text(size = 12, hjust = 0.5),
-        panel.grid.minor.x = element_blank(),
-        panel.grid.major.y = element_blank(),
-        legend.position = "top",
-        legend.title = element_text(margin = margin(b = 5, r = 40)),
-        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
-
-habnewobs_gg_h <- ggarrange(habnewobs_total_gg_h, habnewobs_prop_gg_h,
-                            align = "h", common.legend = TRUE, widths = c(1.35, 1))
-habnewobs_gg_h
-habnewobs_gg_h |> ggsave(filename = "New_species_per_habitat_figure_horizontal.png", path = "Results", dpi = 300, width = 16.5, height = 10.5, units = "cm")
-
-
-
-
-
-
-
-
-
-### By habitat
-
-species1972 <- tar_read(filefjell_1972_clean) |>
-  select(species) |>
-  distinct()
-species2008_09 <- tar_read(filefjell_2008_2009_clean) |>
-  select(species) |>
-  distinct()
-old_species <- species1972 |>
-  rbind(species2008_09) |>
-  distinct()
-
-
-## Bare rock
-
-barrock_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(habitat == "T1") |>
-  distinct() |>
-  arrange(specialisation, species)
-
-# New species in filefjell
-barrock_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(old_species |>
-              distinct())
-
-# Unique species in filefjell
-barrock_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(habitat != "T1") |>
-              distinct())
-
-# No new species, one unique species record (Ara_alp)
-
-
-## Boulder fields
-
-boulder_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(habitat == "T27") |>
-  distinct() |>
-  arrange(specialisation, species)
-
-# New species in filefjell
-boulder_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(old_species |>
-              distinct())
-
-# Unique species in filefjell
-boulder_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(habitat != "T27") |>
-              distinct())
-
-# No new species, one unique species record (Gym_dry)
-
-
-## Ridge
-
-ridge_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(habitat == "T14") |>
-  distinct() |>
-  arrange(specialisation, species)
-
-# New species in filefjell
-ridge_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(old_species |>
-              distinct())
-
-# Unique species in filefjell
-ridge_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(habitat != "T14") |>
-              distinct())
-
-# 3 new species (Lyc_ann, Lyc_cla and Vah_atr), 4 unique species records (Arc_alp, Hie_sp, Lyc_cla and Vah_atr)
-
-
-## Snowbed
-
-snowbed_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(habitat == "T7") |>
-  distinct() |>
-  arrange(specialisation, species)
-
-# New species in filefjell
-snowbed_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(old_species |>
-              distinct())
-
-# Unique species in filefjell
-snowbed_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(habitat != "T7") |>
-              distinct())
-
-# 5 new species (Agr_cap, Cal_phr, Car_sax, Gen_niv and Lyc_ann), and 6 unique species records (Agr_cap, Cal_phr, Car_sax, Gen_niv, Jun_big and Poa_jem)
-
-
-## Wet snowbed
-
-wetland_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(habitat == "V6") |>
-  distinct() |>
-  arrange(specialisation, species)
-
-# New species in filefjell
-wetland_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(old_species |>
-              distinct())
-
-# Unique species in filefjell
-wetland_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(habitat != "V6") |>
-              distinct())
-
-
-## Heath and grass tundra
-
-heathgrass_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(habitat %in% c("T3", "T22")) |>
-  distinct() |>
-  arrange(specialisation, species)
-
-# New species in filefjell
-heathgrass_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(old_species |>
-              distinct())
-
-# Unique species in filefjell
-heathgrass_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(!(habitat %in% c("T3", "T22"))) |>
-              distinct())
-
-not_heathgrass_new_species <- habsumm_new_species |>
-  select(habitat, specialisation, species) |>
-  filter(!(habitat %in% c("T3", "T22"))) |>
-  distinct() |>
-  arrange(habitat, specialisation, species)
-
-heathgrass_new_species |>
-  select(species) |>
-  distinct() |>
-  anti_join(habitat_species |>
-              select(habitat, species) |>
-              filter(!(habitat %in% c("T3", "T22"))) |>
-              distinct())
-
-species_several_habitats <- habsumm_new_species |>
-  summarise(.by = c(habitat, specialisation, species), frequency = n()) |>
-  pivot_wider(names_from = habitat, values_from = frequency) |>
-  arrange(specialisation, species)
-
-
-# Ordination
-
-habsumm_new_species_wide <- habsumm_new_species |>
-  select(!specialisation) |>
-  mutate(presence = 1) |>
-  pivot_wider(names_from = species, values_from = presence, values_fill = 0) |>
-  arrange(habitat)
-
-habsumm_new_species_spec <- habsumm_new_species_wide |> select(!c(summit, habitat))
-habsumm_new_species_meta <- habsumm_new_species_wide |> select(summit, habitat)
-
-habsumm_new_species_nmds <- vegan::metaMDS(
-  habsumm_new_species_spec,
-  distance = "jaccard",
-  k = 2,
-  try = 1000,
-  trymax = 4000
-  )
-habsumm_new_species_sites <- habsumm_new_species_nmds |>
-  scores(display = "sites") |>
-  as.data.frame() |>
-  bind_cols(habsumm_new_species_meta)
-
-habsumm_new_species_sites |>
-  ggplot() +
-  geom_point(aes(x = NMDS1, y = NMDS2, colour = habitat, size = 3))
-
-
-
-
-## Other
-
-habsum_all_new <- habitat_area |>
-  mutate(alpine = "alpine",
-         generalist = "generalist") |>
-  pivot_longer(cols = c(alpine, generalist), names_to = "specialisation", values_to = "dummy") |>
-  select(!dummy) |>
-  full_join(habsum_new_observations) |>
-  mutate(richness = ifelse(is.na(richness), 0, richness),
-         rate = richness / habitat_decare)
-
-habsum_all_new |>
-  ggplot() +
-  geom_boxplot(aes(x = specialisation, y = richness, fill = specialisation)) +
-  facet_grid(~habitat) +
-  theme_classic() +
-  theme(legend.position = "top")
-
-
-hab_diff_species <- habitat_new_species |>
-  summarise(.by = c(habitat, specialisation, species)) |>
-  arrange(habitat, specialisation, species)
-hab_diff_richness <- hab_diff_species |>
-  summarise(.by = c(habitat, specialisation), different = n())
-
-
-
-test3 <- new_species_2024_2025 |>
-  left_join(species_habitats, by = c("summit", "species")) |>
-  summarise(.by = c(species, specialisation), richness = n()) |>
-  filter(richness > 2)
-
-
-
-
-
-
-
-test2 <- habitatall_new_richness |>
-  summarise(.by = c(habitat, specialisation), mean_richness = mean(richness), mean_area = mean(habitat_decare))
-
-test <- habitatall_new_richness |>
-  summarise(.by = c(habitat, specialisation), rate_av = mean (rate), sd = sd(rate))
-# new_species_by_habitat <- new_species_habitat |>
-#   summarise(.by = c(habitat, species, specialisation), richness = n()) |>
-#   arrange(habitat, species)
-#
-# new_richness_by_habitat <- new_species_by_habitat |>
-#   summarise(.by = c(habitat, specialisation), richness = sum(richness)) |>
-#   arrange(habitat)
-#
-# habitat_area <- habitat_cover |>
-#   summarise(.by = habitat, total_area = sum(habitat_decare))
-#
-# new_specialisation_habitat <- new_species_habitat |>
-#   summarise(.by = c(summit, habitat, habitat_decare, specialisation), total = n())
-#
-# new_combined_habitat <- new_specialisation_habitat |>
-#   summarise(.by = c(summit, habitat, habitat_decare), total = sum(total))
-
-# habitat_new <- habitat_species |>
-#   left_join(new_species_2024_2025, by = c("summit", "species")) |>
-#   filter(status == "new") |>
-#   summarise(.by = c(summit, habitat, specialisation, habitat_decare), total = n())
-#   # pivot_wider(names_from = main_type, values_from = total, values_fill = 0) |>
-#   # pivot_longer(cols = c(T7:T22), names_to = "main_type", values_to = "total")
-#
-# habitat_summit_new <- habitat_new |>
-#   summarise(.by = c(habitat, specialisation), total = sum(total))
-#
-# habitat_new <- habitat_new_specialisation |>
-#   summarise(.by = c(summit, habitat, habitat_decare), total = sum(total))
-#   # pivot_wider(names_from = habitat, values_from = total)
-#
-# view(type_new |> summarise(.by = main_type, mean_area = mean(habitat_decare), mean_new = mean((total))))
-
-
-### Analysis----
-
-# Only with the habitats we have more than 0 new species
-
-## Combined
-
-new_combined_habitat |>
-  ggplot() +
-  geom_histogram(aes(x = total))
-
-newhabcomb_mod <- glmmTMB(
-  total ~
-    habitat + log(habitat_decare) + (1 | summit),
-  family = poisson(),
-  data = new_combined_habitat
-)
-newhabcomb_mod |> model_diagnosis()
-newhabcomb_mod |> model_homoscedasticity()
-newhabcomb_mod |> summary()
-
-
-## Full model
-
-habitat_new_richness |>
-  ggplot() +
-  geom_histogram(aes(x = richness))
-
-hab_new_mod <- glmmTMB(
-  richness ~
-    habitat * specialisation + log(habitat_decare) + (1 | summit),
-  family = poisson(),
-  data = habitatall_new_richness
-)
-hab_new_mod |> model_diagnosis()
-hab_new_mod |> model_homoscedasticity()
-hab_new_mod |> summary()
-
-habitatall_new_richness |>
-  # summarise(.by = c(habitat, specialisation), richness = mean(rate), ste = sd(rate)) |>
-  ggplot() +
-  geom_violin(aes(x = habitat, y = rate, fill = specialisation))
-
-
-## Specialists
-
-habitatall_new_richness |>
-  filter(specialisation == "alpine") |>
-  ggplot() +
-  geom_histogram(aes(x = total))
-
-habalp_mod <- glmmTMB(
-  richness ~
-    habitat + log(habitat_decare) + (1 | summit),
-  family = poisson(),
-  data = habitatall_new_richness |> filter(specialisation == "alpine")
-)
-habalp_mod |> model_diagnosis()
-habalp_mod |> model_homoscedasticity()
-habalp_mod |> summary()
-
-
-## Generalists
-
-habitatall_new_richness |>
-  filter(specialisation == "generalist") |>
-  ggplot() +
-  geom_histogram(aes(x = total))
-
-habgen_mod <- glmmTMB(
-  richness ~
-    habitat + log(habitat_decare) + (1 | summit),
-  dispformula = ~habitat,
-  family = poisson(),
-  data = habitatall_new_richness |> filter(specialisation == "generalist")
-)
-habgen_mod |> model_diagnosis()
-habgen_mod |> model_homoscedasticity()
-habgen_mod |> summary()
-
-
-
-## All habitats get 0 if they didn't have new species
-
-habitatall_new_richness |>
-  ggplot() +
-  geom_histogram(aes(x = rate))
-
-haball_new_mod <- glmmTMB(
-  richness ~
-    habitat * specialisation + log(habitat_decare) + (1 | summit),
-  family = poisson(),
-  data = habitatall_new_richness
-)
-haball_new_mod |> model_diagnosis()
-haball_new_mod |> model_homoscedasticity()
-haball_new_mod |> summary()
-
-
-# Specialists
-
-habitatall_new_richness |>
-  filter(specialisation == "alpine") |>
-  ggplot() +
-  geom_histogram(aes(x = richness))
-
-haballalp_new_mod <- glmmTMB(
-  richness ~
-    habitat + log(habitat_decare) + (1 | summit),
-  family = poisson(),
-  data = habitatall_new_richness |> filter(specialisation == "alpine")
-)
-haballalp_new_mod |> model_diagnosis()
-haballalp_new_mod |> model_homoscedasticity()
-haballalp_new_mod |> summary()
-
-# Generalists
-
-habitatall_new_richness |>
-  filter(specialisation == "generalist") |>
-  ggplot() +
-  geom_histogram(aes(x = richness))
-
-haballgen_new_mod <- glmmTMB(
-  richness ~
-    habitat + log(habitat_decare) + (1 | summit),
-  family = poisson(),
-  data = habitatall_new_richness |> filter(specialisation == "generalist")
-)
-haballgen_new_mod |> model_diagnosis()
-haballgen_new_mod |> model_homoscedasticity()
-haballgen_new_mod |> summary()
-
-
-
-type_new_species |>
-  ggplot() +
-  geom_histogram(aes(x = total))
-
-typesnew_mod <- glmmTMB(
-  total ~
-    main_type * specialisation + log(habitat_decare) + (1 | summit),
-  family = compois(),
-  data = type_new_species
-)
-typesnew_mod |> model_diagnosis()
-typesnew_mod |> model_homoscedasticity()
-typesnew_mod |> summary()
-# The model is rank-deficient (we are missing combinations)
-
-
-newtypes_results <- typesnew_pbay_final |>
-  mod_types()
-
-
-
-
-
-
-
-
-newtypes_figure <- newtypes_results$emmeans_df |>
-  mutate(letters = c("A", "A", "B", "C", "C", "BC")) |>
-  ggplot(aes(x = Estimate, y = Habitat)) +
-  theme_minimal() +
-  geom_vline(xintercept = 0, colour = "black") +
-  geom_point(size = 3) +
-  geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4) +
-  geom_text(aes(x = CI_upper + 0.4, label = letters)) +
-  scale_x_continuous(name = "Number of new species / Decare") +
-  scale_y_discrete(labels = adj_label, limits = rev) +
-  theme(text = element_text(size = 14, family = "serif"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_text(hjust = 0.35),
-        axis.text.x = element_text(margin = margin(t = 10, b = 10)),
-        panel.grid.major.y = element_blank(),
-        legend.position = "top",
-        legend.box.margin = margin(l = -10),
-        legend.title = element_text(margin = margin(b = 5, r = 40)),
-        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
-newtypes_figure
-newtypes_figure |> ggsave(file = "Results/Habitat_types.png", width = 20, height = 15, units = "cm")
-
-
-
-
-
-
-summit_area_new |> ggplot() + geom_point(aes(x = area, y = total)) + facet_wrap(~development)
-summit_area_new |> ggplot() + geom_point(aes(x = elevation, y = total)) + facet_wrap(~development)
-
-app1_area_mod <- glmmTMB(
-  total ~ area,
-  data = summit_area_new |> filter(development == "Appeared1")
-)
-app1_area_mod |> summary()
-
-app2_area_mod <- glmmTMB(
-  total ~ area,
-  data = summit_area_new |> filter(development == "Appeared2")
-)
-app2_area_mod |> summary()
-
-baf_area_mod <- glmmTMB(
-  total ~ area,
-  data = summit_area_new |> filter(development == "Back_forth")
-)
-baf_area_mod |> summary()
-
-fab_area_mod <- glmmTMB(
-  total ~ area,
-  data = summit_area_new |> filter(development == "Forth_back")
-)
-fab_area_mod |> summary()
-
-
-
-
-
-
-alltypes_results <- alltypes_mod |> mod_types()
-
-alltypes_results$emmeans_df |>
-  # mutate(specialisation = factor(specialisation, levels = c("generalist", "alpine"))) |>
-  # mutate(letters = c("A", "A", "B", "C", "C", "BC")) |>
-  ggplot(aes(x = Estimate, y = Habitat, colour = specialisation, group = specialisation)) +
-  theme_minimal() +
-  geom_vline(xintercept = 0, colour = "black") +
-  geom_pointrangeh(aes(xmin = CI_lower, xmax = CI_upper), size = 0.8, fatten = 4, position = position_dodge2v(height = 0.4, reverse = TRUE)) +
-  # geom_point(size = 3, position = test25) +
-  # geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = test25) +
-  # geom_text(aes(x = CI_upper + 0.4, label = letters)) +
-  scale_x_continuous(name = "Number of species / 1000m2") +
-  scale_colour_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-  scale_y_discrete(labels = adj_label, limits = rev) +
-  theme(text = element_text(size = 14, family = "serif"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_text(hjust = 0.35),
-        axis.text.x = element_text(margin = margin(t = 10, b = 10)),
-        panel.grid.major.y = element_blank(),
-        legend.position = "top",
-        legend.box.margin = margin(l = -10),
-        legend.title = element_text(margin = margin(b = 5, r = 40)),
-        legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
-newtypes_figure
-newtypes_figure |> ggsave(file = "Results/Habitat_types.png", width = 20, height = 15, units = "cm")
-test25 <-
-  ggstance::position_dodge2v(
-    height   = 0.6,     # <- this controls vertical separation between the two groups
-    preserve = "total", # keeps total stack height similar even if a group is missing
-    reverse  = TRUE     # draws the first level above; also affects legend if reversed
-  )
-
-
-
-
-# Extra models - considering all fixed and random factor combinations----
-## Richness----
-
-# Backwards selection
-
-richrate_modh |> step() |> summary()
-
-
-# Without summit
-
-richrate_mods <- glmmTMB(
-  rate ~
-    period * specialisation,
-  dispformula = ~period,
-  family = gaussian,
-  data = richness_rate)
-
-richrate_mods |> model_diagnosis() # No problems
-richrate_mods |> model_homoscedasticity() # No problems
-richrate_mods |> summary()
-
-richrate_modh |> step() |> summary()
-
-
-# With original richness
-
-richness_1972 <- richness |>
-  filter(year == "first") |>
-  select(!year) |>
-  rename(or_richness = richness)
-richness_rate_extra <- richness_rate |>
-  left_join(richness_1972, by = c("summit", "specialisation")) |>
-  mutate(or_richness = ifelse(is.na(or_richness), 0, or_richness))
-
-richrate_extra_mod <- glmmTMB(
-  rate ~
-    period * specialisation * or_richness + (1 | summit),
-  dispformula = ~period,
-  family = gaussian,
-  data = richness_rate_extra)
-richrate_extra_mod |> model_diagnosis() # No problems
-richrate_extra_mod |> model_homoscedasticity() # No problems
-richrate_extra_mod |> summary()
-
-richrate_extra_mod |> step() |> summary()
-
-richrate_extra_mods <- glmmTMB(
-  rate ~
-    period * specialisation * or_richness,
-  dispformula = ~period,
-  family = gaussian,
-  data = richness_rate_extra)
-richrate_extra_mods |> model_diagnosis() # No problems
-richrate_extra_mods |> model_homoscedasticity() # No problems
-richrate_extra_mods |> summary()
-
-richrate_extra_mods |> step() |> summary()
-
-
-# Functional
-
-richfun <- filefjell_simplified |>
-  summarise(.by = c(year, summit, functional), richness = n())
-
-richfun_rate <- richfun |>
-  pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
-  mutate(period1 = second - first,
-         period2 = third - second) |>
-  select(!c(first:third)) |>
-  pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
-  left_join(summit_periods, by = c("summit", "period")) |>
-  mutate(rate = change / time)
-
-richfun_mod <- glmmTMB(
-  rate ~
-    period * functional + (1 | summit),
-  family = gaussian,
-  data = richfun_rate)
-
-richfun_mod |> model_diagnosis() # No problems
-richfun_mod |> model_homoscedasticity() # period
-richfun_mod |> summary()
-
-richfun_modh <- glmmTMB(
-  rate ~
-    period * functional + (1 | summit),
-  dispformula = ~period*functional,
-  family = gaussian,
-  data = richfun_rate)
-
-richfun_modh |> model_diagnosis() # No problems
-richfun_modh |> model_homoscedasticity() # period
-richfun_modh |> summary()
-richfun_modh |> emmeans(~period*functional) |> tidy(conf.int = TRUE)
-
-
-
-# For comments in the discussion----
-
-maintype_cover_tidy <- tar_read(maintype_cover_tidy)
-maintype_cover_tidy |>
-  select(summit, main_type, percentage) |>
-  filter(main_type %in% c("T1", "T27")) |>
-  summarise(.by = summit, total = sum(percentage))
-
-position_species <- filefjell_simplified |>
-  mutate(position = ifelse(distance <= 20, "bottom", "top")) |>
-  summarise(.by = c(year, summit, position), total = n()) |>
-  summarise(.by = c(year, position), mean = mean(total)) |>
-  arrange(year, position)
-position_species
-
-
-new_altitude <- filefjell_simplified |>
-  pivot_wider(names_from = year, values_from = distance) |>
-  mutate(new1 = ifelse(is.na(first) & !is.na(second), 1, 0),
-         new2 = ifelse(is.na(second) & !is.na(third), 1, 0))
-
-new1_altitude <- new_altitude |>
-  select(first, second, new1) |>
-  filter(!is.na(second)) |>
-  mutate(position = ifelse(second <= 20, "top", "bottom"))
-new1_altitude_mean <- new1_altitude |>
-  summarise(.by = new1, mean = mean(second))
-new1_old_altitude_mean <- new1_altitude |>
-  # filter(new1 == 0) |>
-  summarise(.by = new1, mean = mean(first))
-new1_old_altitude_mean
-new1_altitude_position <- new1_altitude |>
-  summarise(.by = c(new1, position), total = n()) |>
-  arrange(new1, position)
-new1_altitude_position
-
-new2_altitude <- new_altitude |>
-  select(third, new2) |>
-  filter(!is.na(third)) |>
-  mutate(position = ifelse(third <= 20, "top", "bottom"))
-new2_altitude_mean <- new2_altitude |>
-  summarise(.by = new2, mean = mean(third))
-new2_altitude_mean
-new2_altitude_position <- new2_altitude |>
-  summarise(.by = c(new2, position), total = n()) |>
-  arrange(new2, position)
-new2_altitude_position
