@@ -250,3 +250,4 @@ habitat_species_clean <- filefjell_2024_2025_clean |>
 
 filefjell_data_clean |> write_csv("data_clean/Filefjell_data_clean.csv")
 habitat_species_clean |> write_csv("data_clean/Habitat_species_clean.csv")
+
