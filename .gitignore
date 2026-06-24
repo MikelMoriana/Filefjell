@@ -1,8 +1,8 @@
+# Files in the root folder
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
-# Files in the root folder
 
 # Folders in the root folder
 _targets/
@@ -11,4 +11,6 @@ data_raw/
 Graphs/
 Manuscript/
 Results/
+Scripts/A_Checking_targets.R
 Scripts/Other
+.positai
