@@ -73,38 +73,6 @@ data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
 
 # Plotting----
 
-gg_yearline <- function(data, y_var, x_var, row_var, col_var, colour_var) {
-  data |>
-    summarise(.by = c({{x_var}}, {{colour_var}}, {{row_var}}, {{col_var}}),
-              mean = mean(.data[[y_var]], na.rm = TRUE)) |>
-    ggplot(aes(x = .data[[x_var]], y = mean, colour = .data[[colour_var]])) +
-    geom_line(size = 2) +
-    scale_colour_manual(values = colour_mapping[[as.character(substitute(colour_var))]]) +
-    facet_grid(rows = vars(.data[[row_var]]), cols = vars(.data[[col_var]]), labeller = adj_label) +
-    scale_x_continuous(n.breaks = 4) +
-    theme_test() +
-    theme(legend.position = "top")
-}
-
-gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
-  plot <- data |>
-    filter(!is.na(.data[[y_var]])) |>
-    ggplot(aes(x = .data[[x_var]], y = .data[[y_var]], fill = .data[[x_var]])) +
-    geom_jitter(width = 0.2, alpha = 0.2) +
-    geom_boxplot(alpha = 0.8) +
-    scale_fill_manual(values = colour_mapping[[x_var]]) +
-    scale_x_discrete(labels = adj_label) +
-    theme_test() +
-    geom_hline(yintercept = 0, colour = "black") +
-    theme(legend.position = "none")
-  if (!is.null(col_var) && !is.null(row_var)) {
-    plot <- plot + facet_grid(rows = vars(.data[[row_var]]), cols = vars(.data[[col_var]]), labeller = adj_label)
-  } else if (!is.null(col_var)) {
-    plot <- plot + facet_grid(cols = vars(.data[[col_var]]), labeller = adj_label)
-  }
-  return(plot)
-}
-
 adj_label <- c(richness = "Species<br>richness",
                new = "New<br>species",
                lost = "Lost<br>species",
@@ -248,80 +216,6 @@ gg_results <- function(data) {
           legend.position = "top",
           legend.box.margin = margin(l = 80),
           legend.key.spacing.x = unit(1, "cm"))
-}
-
-mod_types <- function(mod) {
-  std_area <- 1
-  format_ft <- function(tbl, id_col) {
-    tbl %>%
-      flextable %>%
-      bg(part = "header", bg = "black") %>%
-      color(part = "header", color = "white") %>%
-      bold(part = "header") %>%
-      bg(part = "body", bg = "white") %>%
-      color(part = "body", color = "black") %>%
-      autofit()
-  }
-
-  ## Model
-  # Extract the fixed effects of the model and arrange as dataframe
-  model_df <- mod %>%
-    tidy(effects = "fixed", conf.int = TRUE) %>%
-    select(!c(effect, component)) %>%
-    rename(Term = term, Estimate = estimate, SE = std.error, Statistic = statistic, p_value = p.value, CI_lower = conf.low, CI_upper = conf.high) %>%
-    mutate(across(where(is.numeric), ~ round(., 4)))
-  # Flextable
-  model_ft <- model_df %>%
-    format_ft() %>%
-    bold(i = ~ ((CI_lower * CI_upper) > 0)) %>%
-    align(part = "all", j = -1, align = "center") %>%
-    hline(i = c(1, 9))
-
-  ## Emmeans
-  reference <- ref_grid(mod,
-                        at = list(habitat_decare = std_area))
-  emmeans <- reference |>
-    emmeans(~ main_type * specialisation, type = "response")
-  # Arrange as dataframe
-  emmeans_df <- emmeans %>%
-    tidy(conf.int = TRUE) %>%
-    mutate(main_type = factor(main_type, levels = c("T1", "T27", "T14", "T3", "T22", "T7", "V"))) %>%
-    rename(Habitat = main_type, Estimate = response, SE = std.error, CI_lower = conf.low, CI_upper = conf.high, p_value = p.value) %>%
-    mutate(across(where(is.numeric), ~ round(., 4)))
-  # Flextable
-  emmeans_ft <-  emmeans_df %>%
-    format_ft() %>%
-    bold(i = ~ p_value < 0.05) %>%
-    align(part = "all", j = 2:7, align = "center") %>%
-    hline(i = 7) %>%
-    vline(j = 1)
-
-  ## Contrasts
-  contrast_spe <- emmeans %>%
-    contrast(method = "pairwise", by ="specialisation", adjust = "tukey")
-  # Make into a dataframe with the desired output
-  contrast_spe_df <- contrast_spe %>%
-    tidy(conf.int = TRUE) %>%
-    select(!c(term, null.value, df, null)) %>%
-    rename(Specialisation = specialisation, Contrast = contrast, Ratio = ratio, SE = std.error, Statistic = statistic, CI_lower = conf.low, CI_upper = conf.high, p_value = adj.p.value) %>%
-    mutate(across(where(is.numeric), ~ round(., 4)))
-  # Flextable
-  contrast_spe_ft <-  contrast_spe_df %>%
-    format_ft() %>%
-    bold(i = ~ p_value < 0.05) %>%
-    align(part = "all", j = 2:6, align = "center") %>%
-    hline(i = c(6, 11, 15, 18, 20, 27, 32, 36, 39, 41)) %>%
-    hline(i = 21, border = officer::fp_border(style = "thick")) %>%
-    vline(j = 1)
-
-  return(list(
-    model_ft = model_ft,
-    emmeans = emmeans,
-    emmeans_df = emmeans_df,
-    emmeans_ft = emmeans_ft,
-    contrast_spe = contrast_spe,
-    contrast_spe_df = contrast_spe_df,
-    contrast_spe_ft = contrast_spe_ft))
 }
 
 clean_ft <- function(tab) {
