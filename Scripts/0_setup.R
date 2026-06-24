@@ -3,7 +3,7 @@
 # Loading the libraries and installing them if not in the Rproj
 
 local({
-  pkgs <- c("targets", "tidyverse", "janitor", "brms","tidybayes", "bayesplot", "performance", "broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "vegan", "conflicted")
+  pkgs <- c("targets", "tidyverse", "janitor", "ggalluvial", "brms","tidybayes", "bayesplot", "performance", "broom.mixed", "emmeans", "glmmTMB", "DHARMa", "ggtext", "flextable", "ggpubr", "vegan", "conflicted")
   missing <- setdiff(pkgs, rownames(installed.packages()))
   if (length(missing)) install.packages(missing)
   for (pkg in pkgs) {
@@ -39,7 +39,7 @@ data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
   data %>%
     # We tidy the data
     clean_names() %>%
-    relocate(year) %>% 
+    relocate(year) %>%
     rename(any_of(c(summit = "top", weather = "vaer"))) %>%
     mutate(summit = str_replace_all(summit, " ", "_"),
            across(any_of("date"), ~ dmy(.x)),
@@ -51,7 +51,7 @@ data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
     select(!height) %>%
     rename(height = correct_height) %>%
     relocate(height:bedrock, .after = summit) %>%
-    # We update the names to the new nomenclature
+    # We correct some names / change to our preferred system
     mutate(species = case_when(species == "Alc_sp" ~ "Alc_glo",
                                species == "Cer_lan" ~ "Cer_alp_lan",
                                species == "Jun_trif" ~ "Jun_tri",
@@ -59,10 +59,11 @@ data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
                                species == "Sil_acu" ~ "Sil_aca",
                                TRUE ~ species)) %>%
     left_join(filefjell_species, by = "species") %>%
+    # We adjust names to the current nomenclature
     mutate(species = ifelse(!is.na(new_name), new_name, species)) %>%
     relocate(c(specialisation, functional), .after = species) %>%
     select(!new_name) %>%
-    # We set the order we are interested in
+    # We set the order we are interested in (from highest to lowest)
     mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi")),
            specialisation = factor(specialisation, levels = c("alpine", "generalist"))) %>%
     arrange(summit, year, species)
@@ -73,28 +74,28 @@ data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
 # Plotting----
 
 gg_yearline <- function(data, y_var, x_var, row_var, col_var, colour_var) {
-  data |> 
-    summarise(.by = c({{x_var}}, {{colour_var}}, {{row_var}}, {{col_var}}), 
-              mean = mean(.data[[y_var]], na.rm = TRUE)) |> 
-    ggplot(aes(x = .data[[x_var]], y = mean, colour = .data[[colour_var]])) + 
-    geom_line(size = 2) + 
-    scale_colour_manual(values = colour_mapping[[as.character(substitute(colour_var))]]) + 
-    facet_grid(rows = vars(.data[[row_var]]), cols = vars(.data[[col_var]]), labeller = adj_label) + 
-    scale_x_continuous(n.breaks = 4) + 
-    theme_test() + 
+  data |>
+    summarise(.by = c({{x_var}}, {{colour_var}}, {{row_var}}, {{col_var}}),
+              mean = mean(.data[[y_var]], na.rm = TRUE)) |>
+    ggplot(aes(x = .data[[x_var]], y = mean, colour = .data[[colour_var]])) +
+    geom_line(size = 2) +
+    scale_colour_manual(values = colour_mapping[[as.character(substitute(colour_var))]]) +
+    facet_grid(rows = vars(.data[[row_var]]), cols = vars(.data[[col_var]]), labeller = adj_label) +
+    scale_x_continuous(n.breaks = 4) +
+    theme_test() +
     theme(legend.position = "top")
 }
 
 gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
-  plot <- data |> 
-    filter(!is.na(.data[[y_var]])) |> 
-    ggplot(aes(x = .data[[x_var]], y = .data[[y_var]], fill = .data[[x_var]])) + 
-    geom_jitter(width = 0.2, alpha = 0.2) + 
-    geom_boxplot(alpha = 0.8) + 
-    scale_fill_manual(values = colour_mapping[[x_var]]) + 
-    scale_x_discrete(labels = adj_label) + 
-    theme_test() + 
-    geom_hline(yintercept = 0, colour = "black") + 
+  plot <- data |>
+    filter(!is.na(.data[[y_var]])) |>
+    ggplot(aes(x = .data[[x_var]], y = .data[[y_var]], fill = .data[[x_var]])) +
+    geom_jitter(width = 0.2, alpha = 0.2) +
+    geom_boxplot(alpha = 0.8) +
+    scale_fill_manual(values = colour_mapping[[x_var]]) +
+    scale_x_discrete(labels = adj_label) +
+    theme_test() +
+    geom_hline(yintercept = 0, colour = "black") +
     theme(legend.position = "none")
   if (!is.null(col_var) && !is.null(row_var)) {
     plot <- plot + facet_grid(rows = vars(.data[[row_var]]), cols = vars(.data[[col_var]]), labeller = adj_label)
@@ -104,21 +105,29 @@ gg_modvars <- function(data, y_var, x_var, col_var = NULL, row_var = NULL) {
   return(plot)
 }
 
-adj_label <- c(richness = "Species<br>richness", 
-               new = "New<br>species", 
-               lost = "Lost<br>species", 
+adj_label <- c(richness = "Species<br>richness",
+               new = "New<br>species",
+               lost = "Lost<br>species",
                altitude = "Uppermost<br>occurrence",
-               alpine = "Specialist",
-               generalist = "Generalist",
+               alpine = "Specialists",
+               generalist = "Generalists",
                period1 = "1972–2008/09",
                period2 = "2008/09–2024/25",
                T1 = "Bare rock",
-               T27 = "Boulderfield",
-               T14 = "Ridge",
-               T3 = "Alpine heath,\nleeside and tundra",
-               T22 = "Alpine grassland\nand grass tundra",
-               T7 = "Snowbed",
-               V6 = "Wet snowbed")
+               T27 = "Boulder fields",
+               T13 = "Scree",
+               T14 = "Ridges",
+               T3 = "Alpine heath",
+               T22 = "Alpine grassland",
+               T7 = "Snowbeds",
+               V6 = "Wet snowbeds")
+
+alluvial_palette <- c("Remained" = "#4DAF4A",
+                      "Lost" = "#D95F02",
+                      "New" = "#1F78B4", # 66C2A5, 1F78B4
+                      "Absent" = "#CCCCCC",
+                      "0" = "white",
+                      "1" = "#4DAF4A")
 
 colour_mapping <-  list(
   period = c("period1" = "#859395", "period2" = "#f58800"),
@@ -126,9 +135,10 @@ colour_mapping <-  list(
 )
 
 
+
 # Model results----
 
-mod_summary <- function(mod) {
+mod_summary <- function(mod, seed = 811) {
   format_ft <- function(tbl, id_col) {
     tbl %>%
       flextable %>%
@@ -146,7 +156,7 @@ mod_summary <- function(mod) {
     "1A-1G" = c(-1, 0, 1, 0),
     "2A-2G" = c(0, -1, 0, 1)
   )
-  
+
   ## Model
   # Extract the fixed effects of the model and arrange as dataframe
   model_df <- tidy(mod, effects = "fixed", conf.int = TRUE) %>%
@@ -185,25 +195,26 @@ mod_summary <- function(mod) {
   contrast_numbers <- unique(ref_grid[c("period", "specialisation")])
   # Perform contrast analysis with only the desired contrast
   contrast <- emmeans %>%
-    contrast(method = contrast_matrix)
+    contrast(method = contrast_matrix, adjust = "mvt")
+  set.seed(seed) # For full reproducibility
   # Make into a dataframe with the desired output
   contrast_df <- contrast %>%
     tidy(conf.int = TRUE) %>%
     select(!c(term, null.value)) %>%
     mutate(std.error = if (!"std.error" %in% names(.)) NA_real_ else std.error,
-           p.value = if (!"p.value" %in% names(.)) NA_real_ else p.value) %>%
+           adj.p.value = if (!"adj.p.value" %in% names(.)) NA_real_ else adj.p.value) %>%
     relocate(std.error, .after = estimate) %>%
-    rename(Contrast = contrast, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = p.value) %>%
+    rename(Contrast = contrast, Estimate = estimate, SE = std.error, CI_lower = any_of(c("conf.low", "lower.HPD")), CI_upper = any_of(c("conf.high", "upper.HPD")), p_value = adj.p.value) %>%
     mutate(across(where(is.numeric), ~ round(., 4)))
   # Flextable
-  contrast_ft <-  contrast_df %>% 
+  contrast_ft <-  contrast_df %>%
     format_ft() %>%
     align(part = "all", j = 2:6, align = "center") %>%
     hline(i = 2) %>%
     vline(j = 1)
-  
+
   return(list(
-    model_ft = model_ft, 
+    model_ft = model_ft,
     emmeans = emmeans,
     emmeans_df = emmeans_df,
     emmeans_ft = emmeans_ft,
@@ -215,28 +226,28 @@ mod_summary <- function(mod) {
 }
 
 gg_results <- function(data) {
-  data |> 
+  data |>
     mutate(Period = factor(Period, levels = c("period2", "period1")),
            Specialisation = factor(Specialisation, levels = c("generalist", "alpine"))) |>
     ggplot(aes(x = Estimate, y = Period, colour = Specialisation)) +
-    theme_minimal() +
-    theme(panel.background = element_rect(fill = "white", colour = NA),
-          plot.background = element_rect(fill = "white", colour = NA)) +
     geom_vline(xintercept = 0, colour = "black") +
     geom_point(size = 3, position = position_dodge(width = 0.6)) +
-    geom_errorbarh(aes(xmin = CI_lower, xmax = CI_upper), height = 0.4, position = position_dodge(width = 0.6)) +
+    geom_errorbar(aes(xmin = CI_lower, xmax = CI_upper), width = 0.4, position = position_dodge(width = 0.6)) +
     scale_y_discrete(labels = adj_label) +
-    scale_colour_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
+    scale_colour_manual("", values = colour_mapping$specialisation, labels = adj_label) +
     guides(colour = guide_legend(reverse = TRUE)) +
-    theme(text = element_text(size = 14, family = "serif"),
-          axis.title.x = element_text(hjust = 0.35),
-          axis.text.x = element_text(margin = margin(t = 10, b = 10)),
-          axis.title.y = element_markdown(angle = 0, hjust = 0, vjust = 0.5, margin = margin(r = 30)),
+    theme_minimal() +
+    theme(panel.background = element_rect(fill = "white", colour = NA),
+          plot.background = element_rect(fill = "white", colour = NA),
           panel.grid.major.y = element_blank(),
+          panel.border = element_blank(),
+          text = element_text(size = 14, family = "serif"),
+          axis.title.x = element_text(hjust = 0.35, size = 12, margin = margin(t = 5)),
+          axis.text.x = element_text(margin = margin(t = 10)),
+          axis.title.y = element_markdown(angle = 0, hjust = 0, vjust = 0.5, margin = margin(r = 30)),
           legend.position = "top",
-          legend.box.margin = margin(l = -10),
-          legend.title = element_text(margin = margin(b = 5, r = 40)),
-          legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)))
+          legend.box.margin = margin(l = 80),
+          legend.key.spacing.x = unit(1, "cm"))
 }
 
 mod_types <- function(mod) {
@@ -251,7 +262,7 @@ mod_types <- function(mod) {
       color(part = "body", color = "black") %>%
       autofit()
   }
-  
+
   ## Model
   # Extract the fixed effects of the model and arrange as dataframe
   model_df <- mod %>%
@@ -265,7 +276,7 @@ mod_types <- function(mod) {
     bold(i = ~ ((CI_lower * CI_upper) > 0)) %>%
     align(part = "all", j = -1, align = "center") %>%
     hline(i = c(1, 9))
-  
+
   ## Emmeans
   reference <- ref_grid(mod,
                         at = list(habitat_decare = std_area))
@@ -313,96 +324,265 @@ mod_types <- function(mod) {
     contrast_spe_ft = contrast_spe_ft))
 }
 
+clean_ft <- function(tab) {
+  tab_ft <- tab |>
+    flextable() |>
+    bg(part = "header", bg = "black") |>
+    color(part = "header", color = "white") |>
+    bold(part = "header") |>
+    bg(part = "body", bg = "white") |>
+    color(part = "body", color = "black") |>
+    flextable::font(part = "all", fontname = "Times New Roman") |>
+    fontsize(part = "header", size = 13) |>
+    fontsize(part = "body", size = 12)
+  tab_ft
+}
+
 # Model fitness----
 
-model_diagnosis <- function(fitted_model, timev = NULL) {
-  sim_res <- simulateResiduals(fitted_model, plot = FALSE)
-  plot.new()
-  
-  # Perform the diagnostic tests
-  uniformity_test <- testUniformity(sim_res, plot = FALSE)
-  outliers_test <- testOutliers(sim_res, plot = FALSE)
-  dispersion_test <- testDispersion(sim_res, plot = FALSE)
-  quantiles_test <- testQuantiles(sim_res, plot = FALSE) # Note: running plot = FALSE changes the methods used in the test, which may change the results
-  zero_inflation_test <- testZeroInflation(sim_res, plot = FALSE)
-  
-  # Collect the results in a list
+model_diagnosis <- function(fitted_model, n_sims = 500) {
+
+  # 1 Simulate residuals
+  sim_res <- DHARMa::simulateResiduals(fitted_model, n = n_sims, plot = FALSE)
+
+  # 2 Perform the diagnostic tests
+  uniformity_test <- DHARMa::testUniformity(sim_res, plot = FALSE)
+  quantiles_test <- DHARMa::testQuantiles(sim_res, plot = FALSE) # Note: running plot = FALSE changes the methods used in the test, which may change the results
+  dispersion_test <- DHARMa::testDispersion(sim_res, plot = FALSE)
+  zero_inflation_test <- DHARMa::testZeroInflation(sim_res, plot = FALSE)
+  outliers_test <- DHARMa::testOutliers(sim_res, plot = FALSE)
+
   results <- list(
     UNIFORMITY = uniformity_test,
-    OUTLIERS = outliers_test,
-    DISPERSION = dispersion_test,
     QUANTILES = quantiles_test,
-    ZERO_INFLATION = zero_inflation_test
+    DISPERSION = dispersion_test,
+    ZERO_INFLATION = zero_inflation_test,
+    OUTLIERS = outliers_test
   )
-  
-  # In case we have a temporal variable and want to check for autocorrelation
-  if (!is.null(timev)) {
-    time_vector <- fitted_model$frame |> pull({{timev}})
-    test_temporal_autocorrelation <- testTemporalAutocorrelation(recalculateResiduals(sim_res, group = time_vector), time = unique(time_vector), plot = FALSE)
-    results$TEMPORAL_AUTOCORRELATION <- test_temporal_autocorrelation
+
+  # 3 Quiet plotting helper (evaluate in caller frame, suppress output)
+  in_silence <- function(expr) {
+    invisible(capture.output(suppressMessages(suppressWarnings(eval.parent(substitute(expr))))))
   }
-  
-  # This function removes the console output (used when creating the plots)
-  in_silence <- function(...) {
-    mc <- match.call()[-1]
-    a <- capture.output(
-      tryCatch(
-        suppressMessages(suppressWarnings(
-          eval(as.list(mc)[[1]])
-        )), error = function(e) ""))
-  }
-  
-  # Generate and display the plots
+
+  # 4 Generate and display the plots
+  op <- par(no.readonly = TRUE); on.exit(par(op), add = TRUE)
   par(mfrow = c(2, 2))
-  in_silence(testUniformity(sim_res))
-  in_silence(testOutliers(sim_res))
-  in_silence(testDispersion(sim_res))
-  in_silence(testQuantiles(sim_res))
-  par(mfrow = c(1, 1))
-  
+  in_silence(DHARMa::testUniformity(sim_res))
+  in_silence(DHARMa::testQuantiles(sim_res))
+  in_silence(DHARMa::testDispersion(sim_res))
+  in_silence(DHARMa::testOutliers(sim_res))
+
   return(results)
 }
 
-model_homoscedasticity <- function(fitted_model) {
-  sim_res <- simulateResiduals(fitted_model, plot = FALSE)
+model_homoscedasticity <- function(fitted_model, n_sims = 500, effect_measure = c("sd", "iqr"), make_plots = TRUE, seed = 811, notes = TRUE) {
+
+  effect_measure <- match.arg(effect_measure)
+
+  # 1 Simulate residuals
+  set.seed(seed)
+  sim_res <- DHARMa::simulateResiduals(fitted_model, n = n_sims, plot = FALSE)
+
+  # 2 Parse terms and data
   response_variable <- all.vars(formula(fitted_model))[1]
-  explanatory_variables <- fitted_model |> formula() |> terms() |> attr("term.labels")
-  single_variables <- explanatory_variables[!grepl("[:/(|]", explanatory_variables)]
-  plot.new() # Initialize a new plot
-  
-  # Perform the diagnostic tests
-  test_statistics <- lapply(single_variables, function(var) {
-    testCategorical(sim_res, catPred = fitted_model$frame %>% filter(!is.na(response_variable)) %>% pull(var), plot = FALSE)
-  })
-  
-  names(test_statistics) <- single_variables
-  
-  # This function removes the console output (used when creating the plots)
-  in_silence <- function(...) {
-    mc <- match.call()[-1]
-    a <- capture.output(
-      tryCatch(
-        suppressMessages(suppressWarnings(
-          eval(as.list(mc)[[1]])
-        )), error = function(e) ""))
+  explanatory_variables <- attr(terms(fitted_model), "term.labels")
+  single_variables <- explanatory_variables[!grepl("[:/|(]", explanatory_variables)]
+
+  # Frame aligned with model; remove rows with missing response
+  df <- fitted_model$frame |>
+    dplyr::filter(!is.na(.data[[response_variable]]))
+
+  # Function to remove the console output (used when creating the plots)
+  in_silence <- function(expr) {
+    capture.output(suppressMessages(suppressWarnings(eval.parent(substitute(expr)))))
   }
-  
-  # Generate and display the plots
-  par(mfrow = c(2, 2))
+
+  # Optional multi‑panel plots
+  if (isTRUE(make_plots)) {
+    op <- par(no.readonly = TRUE); on.exit(par(op), add = TRUE)
+    par(mfrow = c(2, 2))
+  }
+
+  out <- setNames(vector("list", length(single_variables)), single_variables)
+
+  # 3 Loop over predictors
   for (var in single_variables) {
-    in_silence(testCategorical(sim_res, catPred = fitted_model$frame %>% filter(!is.na(response_variable)) %>% pull(var)))
+    groups <- df[[var]]
+    # (A) DHARMa categorical test: within‑group uniformity + Levene across groups
+    test_categorical <- DHARMa::testCategorical(sim_res, catPred = groups, plot = isTRUE(make_plots))
+
+    # (B) EFFECT SIZE(S)
+    # -- spread summary per level on DHARMa residuals
+    r <- sim_res$scaledResiduals[seq_along(groups)]  # aligned after NA filtering
+    group_summary <- dplyr::tibble(grp = groups, r = r) |>
+      dplyr::group_by(grp) |>
+      dplyr::summarise(
+        n = dplyr::n(),
+        sd = stats::sd(r),
+        iqr = stats::IQR(r),
+        .groups = "drop"
+      )
+    spread_vec <- if (effect_measure == "sd") group_summary$sd else group_summary$iqr
+    spread_ratio <- max(spread_vec, na.rm = TRUE) /
+      max(min(spread_vec, na.rm = TRUE), .Machine$double.eps)
+
+    # -- partial eta^2 from Levene F and dfs
+    levene <- test_categorical$homogeneity
+    df1 <- levene$Df[1]
+    df2 <- levene$Df[2]
+    Fv  <- levene$`F value`[1]
+    eta2p <- (Fv * df1) / (Fv * df1 + df2)
+
+    # -- within‑group KS D per level (effect size for uniformity test)
+    ks_by_level <- lapply(split(r, groups), function(x) {
+      if (length(unique(x)) < 2) return(NA_real_)
+      suppressWarnings(stats::ks.test(x, "punif")$statistic[[1]])
+    })
+
+    levels <- names(unlist(ks_by_level))
+    ks_vec <- unlist(ks_by_level)
+
+    # name the per-level p-values by the same order
+    uni_p <- stats::setNames(test_categorical$uniformity$p.value, levels)
+    uni_padj <- stats::setNames(test_categorical$uniformity$p.value.cor, levels)
+
+    # HOMOGENEITY: turn Levene table into a tibble
+    homogeneity_tbl <- levene
+
+    # Effect sizes table
+    effect_sizes_tbl <- tibble::tibble(
+      Measure = effect_measure,
+      Ratio_max_min = spread_ratio,
+      Partial_eta2 = eta2p
+    )
+
+    # PER-LEVEL: join group summary with per-level uniformity and KS-D
+    per_level_tbl <- group_summary |>
+      dplyr::mutate(
+        levels = as.character(grp),
+        uniformity_p = unname(uni_p[levels]),
+        uniformity_p_adj = unname(uni_padj[levels]),
+        ks_D_by_level = unname(ks_vec[levels])
+      ) |>
+      dplyr::select(levels, n, uniformity_p, uniformity_p_adj, sd, iqr, ks_D_by_level)
+
+    # (C) Assemble output for this variable
+    out[[var]] <- list(
+      Homogeneity = homogeneity_tbl,
+      `Effect sizes` = effect_sizes_tbl,
+      `Per-level` = per_level_tbl
+    )
   }
-  par(mfrow = c(1, 1))
-  
-  # Formatting the output
-  format_testCategorical_output <- function(test_result) {
-    p_values <- test_result$uniformity$p.value
-    p_values_cor <- test_result$uniformity$p.value.cor
-    homogeneity <- test_result$homogeneity
-    results <- list(p_values = p_values, Corrected_p_values = p_values_cor, Homogeneity = homogeneity)
-    return(results)
+
+  # 4 Adding notes for interpretation
+  if (isTRUE(notes)) {
+    notes_text <- c(
+      "Spread ratio (max/min): Use descriptively; consider modelling dispersion when Levene p < 0.05 AND ratio >= ~1.5-2.0.",
+      "- DHARMa::testCategorical (Levene) — model variances when significant",
+      "Partial eta^2 (Levene): Small ~ 0.01; Medium ~ 0.06; Large ~ 0.14 (context, not a strict rule)",
+      "- Cohen-style conventions; see `effectsize` docs",
+      "KS D per level: D is max distance between residual ECDF and Uniform(0,1); 0 is perfect. Use adjusted p as primary; treat large D as stronger evidence when it aligns with other diagnostics",
+      "- DHARMa vignette: interpret tests jointly; Uniform(0,1) target"
+    )
+    out <- c(out, list(`Rules of thumb` = notes_text))
   }
-  formatted_output <- lapply(test_statistics, format_testCategorical_output)
-  
-  return(formatted_output)
+
+  return(out)
 }
+
+model_temporal_ac <- function(fitted_model, timev, groupv = NULL, n_sims = 500, notes = TRUE, quiet = FALSE) {
+  stopifnot(is.character(timev), length(timev) == 1L)
+  if (!timev %in% names(fitted_model$frame)) {
+    stop(sprintf("Column '%s' not found in fitted_model$frame.", timev))
+  }
+  if (!is.null(groupv)) {
+    stopifnot(is.character(groupv), length(groupv) == 1L)
+    if (!groupv %in% names(fitted_model$frame)) {
+      stop(sprintf("Column '%s' not found in fitted_model$frame.", groupv))
+    }
+  }
+
+  # Simulated residuals (portable; no rotation token to avoid version differences)
+  res <- DHARMa::simulateResiduals(fitted_model, n = n_sims, plot = FALSE)
+
+  # Single series (no grouping)
+  if (is.null(groupv)) {
+    time_vec <- fitted_model$frame[[timev]]
+    if (anyDuplicated(time_vec)) {
+      res_a <- DHARMa::recalculateResiduals(res, group = time_vec)
+      test <- DHARMa::testTemporalAutocorrelation(res_a, time = unique(time_vec), plot = !quiet)
+    } else {
+      test <- DHARMa::testTemporalAutocorrelation(res, time = time_vec, plot = !quiet)
+    }
+    out <- list(n_series = 1L, p_values = test$p.value,
+                combined_p_fisher = test$p.value,
+                prop_p_under_0_05 = as.numeric(test$p.value < 0.05))
+    if (!quiet) {
+      message(sprintf("Temporal AC (single series): p = %.3f", test$p.value))
+    }
+    return(out)
+  }
+
+  # Panel: per-group tests, combined
+  time_vec <- fitted_model$frame[[timev]]
+  grp_vec <- fitted_model$frame[[groupv]]
+  grp_vals <- unique(grp_vec)
+
+  p_vals <- vapply(grp_vals, function(g) {
+    sel <- grp_vec == g
+    t_g <- time_vec[sel]
+    if (length(unique(t_g)) < 2L) return(NA_real_)
+    r_g <- DHARMa::recalculateResiduals(res, sel = sel)
+    if (anyDuplicated(t_g)) {
+      r_ga <- DHARMa::recalculateResiduals(r_g, group = t_g)
+      DHARMa::testTemporalAutocorrelation(r_ga, time = unique(t_g), plot = FALSE)$p.value
+    } else {
+      DHARMa::testTemporalAutocorrelation(r_g, time = t_g, plot = FALSE)$p.value
+    }
+  }, numeric(1))
+
+  p_use <- p_vals[is.finite(p_vals)]
+  k <- length(p_use)
+
+  if (k == 0) {
+    out <- list(n_series = 0L, p_values = p_vals,
+                combined_p_fisher = NA_real_, prop_p_under_0_05 = NA_real_)
+  } else {
+    fisher_stat <- -2 * sum(log(p_use))
+    fisher_p <- stats::pchisq(fisher_stat, df = 2 * k, lower.tail = FALSE)
+    prop_small <- mean(p_use < 0.05)
+    out <- list(n_series = k, p_values = p_vals,
+                combined_p_fisher = fisher_p, prop_p_under_0_05 = prop_small)
+    if (!quiet) {
+      msg <- sprintf("Temporal AC across %d series: Fisher p = %.3g; fraction p<0.05 = %.2f",
+                     k, fisher_p, prop_small)
+      message(msg)
+    }
+  }
+
+  if (isTRUE(notes)) {
+    alpha <- 0.05
+    m <- sum(is.finite(p_vals))
+    ub_count <- stats::qbinom(0.95, size = m, prob = alpha)   # 95% null upper bound (count)
+    ub_prop <- ub_count / m  # ...as a proportion
+
+    notes_text <- c(
+      "Global signal (Fisher p): If Fisher's combined p >= 0.05, treat as no overall temporal AC; investigate if < 0.05.",
+      "- Combine per-series p-values with Fisher to get one omnibus test.",
+      sprintf("Excess small p-values: Under H0, per-series p-values are ~Uniform(0,1). With m = %d and alpha = %.02f, expect ~m*alpha and a 95%% null upper bound of about %.02f (k <= %d). Start investigating if your prop p<%.02f > %.02f or if a one-sided binomial test vs Binomial(m, alpha) is significant.",
+              m, alpha, ub_prop, ub_count, alpha, ub_prop),
+      "- Counting p<alpha is binomial under H0; use this as a quick prevalence screen.",
+      "FDR screen (BH): If any series remains significant after BH at q <= 0.05, follow up.",
+      "- Use stats::p.adjust(p_vals, method = 'BH') for an FDR check.",
+      "Borderline results: If key p-values are ~0.03–0.07, re-run diagnostics with n_sims ~ 2000 to stabilise.",
+      "- Larger DHARMa simulation counts reduce Monte-Carlo jitter.",
+      "Per-series test: DHARMa uses a Durbin–Watson test on uniform residuals; ensure unique time within each series (aggregate within-series if needed).",
+      "- See DHARMa::testTemporalAutocorrelation help for details."
+    )
+    out <- c(out, list(`Rules of thumb` = notes_text))
+  }
+
+  return(out)
+}
+
