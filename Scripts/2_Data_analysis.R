@@ -989,7 +989,7 @@ altrate_tbay_r2 <- r2_bayes(altrate_tbay)
 altrate_tbay_r2 # Neither the fixed effects nor the random effects explain much
 
 
-# 5. Post hoc # I NEED TO CHECK WEIGHING (so that I see movement per species)
+# 5. Post hoc
 
 altrate_results <- altrate_tbay |>
   mod_summary()
@@ -1017,6 +1017,7 @@ altrate_generalists <- altrate_tbay |>
   tidy(conf.int = TRUE)
 altrate_specialists
 altrate_generalists
+
 
 
 
@@ -1146,205 +1147,6 @@ rates_figure <- ggarrange(
 )
 rates_figure
 rates_figure |> ggsave(file = "Results/Rates_emmeans_figure.png", width = 20, height = 15, units = "cm", bg = "white")
-
-
-
-# Rate Variance----
-
-# We noticed that variance seems to be greater in period 2 for most models. We address it here
-
-## Richness
-
-richrate_disp <- richrate_modh |>
-  emmeans(~ period, component = "disp") |>
-  as.data.frame() |>
-  transmute(period,
-            logvar = emmean,
-            logvar_lwr = lower.CL,
-            logvar_upr = upper.CL,
-            variance = exp(logvar), # Back-transform to variance with 95% CIs
-            var_lwr = exp(logvar_lwr),
-            var_upr = exp(logvar_upr))
-richrate_disp
-
-
-## New species
-
-new_disp <- new_modh |>
-  emmeans(~ period, component = "disp") |>
-  as.data.frame() |>
-  transmute(period,
-            logvar = emmean,
-            logvar_lwr = lower.CL,
-            logvar_upr = upper.CL,
-            variance = exp(logvar), # Back-transform to variance with 95% CIs
-            var_lwr = exp(logvar_lwr),
-            var_upr = exp(logvar_upr))
-new_disp
-
-
-## Lost species
-
-lost_disp <- lost_modh |>
-  emmeans(~ period, component = "disp") |>
-  as.data.frame() |>
-  transmute(period,
-            logvar = emmean,
-            logvar_lwr = lower.CL,
-            logvar_upr = upper.CL,
-            variance = exp(logvar), # Back-transform to variance with 95% CIs
-            var_lwr = exp(logvar_lwr),
-            var_upr = exp(logvar_upr))
-lost_disp
-
-
-## Altitudinal change
-
-altrate_disp <- altrate_tbay |>
-  spread_draws(b_sigma_Intercept, b_sigma_periodperiod2) |>
-  mutate(logvar_period1 = b_sigma_Intercept,
-         logvar_period2 = b_sigma_Intercept + b_sigma_periodperiod2,
-         var_period1 = exp(b_sigma_Intercept),
-         var_period2 = exp(b_sigma_Intercept + b_sigma_periodperiod2)) |>
-  pivot_longer(cols = c(logvar_period1, logvar_period2, var_period1, var_period2),
-               names_to = c("scale", "period"),
-               names_pattern = "(logvar|var)_period(\\d)") |>
-  summarise(.by = c("period", "scale"),
-            estimate = mean(value),
-            lwr = quantile(value, 0.025),
-            upr = quantile(value, 0.975)) |>
-  pivot_longer(cols = c(estimate, lwr, upr)) |>
-  mutate(period = paste0("period", period),
-         names = paste0(scale, "_", name)) |>
-  select((!c("scale", "name"))) |>
-  pivot_wider(names_from = names, values_from = value) |>
-  rename(logvar = logvar_estimate,
-         variance = var_estimate)
-altrate_disp
-
-
-## Table
-
-variance_ft <- richrate_disp |>
-  mutate(model = "Species richness",
-         joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
-  select(model, period, joined) |>
-  rbind(new_disp |>
-          mutate(model = "New species",
-                 joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
-          select(model, period, joined)) |>
-  rbind(lost_disp |>
-          mutate(model = "Lost species",
-                 joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
-          select(model, period, joined)) |>
-  rbind(altrate_disp |>
-          mutate(model = "Uppermost occurrence",
-                 joined = glue::glue("{round(variance, 2)} ({round(var_lwr, 2)}–{round(var_upr, 2)})")) |>
-          select(model, period, joined)) |>
-  pivot_wider(names_from = period, values_from = joined) |>
-  clean_ft() |>
-  set_header_labels(model = "Model",
-                    period1 = "Period 1",
-                    period2 = "Period 2") |>
-  align(part = "all", j = 2:3, align = "center") |>
-  autofit()
-variance_ft
-variance_ft |> save_as_image(path = "Results/Rates_Variance_table.png", res = 300)
-
-
-
-
-# Ordination analysis----
-### Data----
-
-wide_filefjell <- filefjell_simplified |>
-  select(year, summit, species) |>
-  mutate(presence = 1) |>
-  arrange(species, summit, year) |>
-  pivot_wider(names_from = species, values_from = presence, values_fill = 0)
-
-wide_species <- wide_filefjell |> select(!year:summit)
-wide_metadata <- wide_filefjell |> select(year:summit) |> mutate(label = 1:n(), label = as.character(label))
-
-nmds_analysis <- metaMDS(wide_species, distance = "jaccard", k = 2, try = 1000, trymax = 4000)
-
-nmds_sites <- nmds_analysis |>
-  scores(display = "sites", tidy = TRUE) |>
-  left_join(wide_metadata, by = "label")
-nmds_species <- nmds_analysis |>
-  scores(display = "species", tidy = TRUE) |>
-  rename(species = label) |>
-  left_join(filefjell_simplified |>
-              select(species, specialisation, functional),
-            by = "species")
-
-test <- nmds_analysis |>
-  envfit(env = wide_metadata |> select(year, summit), perm = 999)  |>
-  scores(display = "factors") |>
-  as.data.frame()
-
-
-ggplot(data = nmds_sites, aes(x = NMDS1, y = NMDS2)) +
-  geom_point() +
-  stat_ellipse(aes(fill = year), geom = "polygon", alpha = 0.5)
-
-ggplot(data = nmds_species, aes(x = NMDS1, y = NMDS2)) +
-  geom_point() +
-  stat_ellipse(aes(fill = specialisation), geom = "polygon", alpha = 0.5)
-
-ggplot(data = nmds_species, aes(x = NMDS1, y = NMDS2)) +
-  geom_point() +
-  stat_ellipse(aes(fill = functional), geom = "polygon", alpha = 0.5)
-
-
-# Do we see dominant groups by mountains?
-
-third_wide <- filefjell_simplified |>
-  filter(year == "third") |>
-  select(year, summit, species) |>
-  mutate(presence = 1) |>
-  arrange(species, summit, year) |>
-  pivot_wider(names_from = species, values_from = presence, values_fill = 0)
-third_species <- third_wide |> select(!year:summit)
-third_metadata <- third_wide |> select(year:summit) |> mutate(label = 1:n(), label = as.character(label))
-
-nmds_third <- metaMDS(third_species, distance = "jaccard", k = 2, try = 1000, trymax = 4000)
-
-nmds_third_sites <- nmds_third |>
-  scores(display = "sites", tidy = TRUE) |>
-  left_join(third_metadata, by = "label")
-nmds_third_species <- nmds_third |>
-  scores(display = "species", tidy = TRUE) |>
-  rename(species = label) |>
-  inner_join(filefjell_simplified |>
-              select(species, specialisation, functional) |>
-               distinct(),
-            by = "species")
-
-nmds_third_functional <- nmds_third_species |>
-  summarise(.by = functional, NMDS1 = mean(NMDS1), NMDS2 = mean(NMDS2), n_species = n())
-
-
-ggplot(data = nmds_third_sites, aes(x = NMDS1, y = NMDS2)) +
-  geom_point() +
-  geom_segment(
-    data = nmds_third_functional,
-    aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2),
-    arrow = arrow(length = unit(0.25, "cm")),
-    linewidth = 1,
-    colour = "black"
-  ) +
-  geom_text(
-    data = nmds_third_sites,
-    aes(NMDS1, NMDS2, label = summit),
-    hjust = 0.5, vjust = -0.8, size = 4
-  ) +
-  geom_text(
-    data = nmds_third_functional,
-    aes(NMDS1, NMDS2, label = functional),
-    hjust = 0.5, vjust = -0.8, size = 4
-  )
-
 
 
 
