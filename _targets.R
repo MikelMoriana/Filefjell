@@ -1,4 +1,4 @@
-# Created by use_targets().
+# Created by use_targets()
 # Setting up the environment----
 
 # Load packages required to define the pipeline:
@@ -509,10 +509,10 @@ list(
       rename("Specialists" = alpine,
              "Generalists" = generalist,
              "1972-2008/09" = period1,
-             "2008/09-2024/25" = period2) |> 
+             "2008/09-2024/25" = period2) |>
       clean_ft() |>
-      hline(i = c(2, 3), border = officer::fp_border(color = "grey")) |> 
-      merge_v(j = 1) |> 
+      hline(i = c(2, 3), border = officer::fp_border(color = "grey")) |>
+      merge_v(j = 1) |>
       align(j = 3:4, align = "center") |>
       fontsize(part = "header", size = 12) |>
       fontsize(part = "body", size = 11) |>
@@ -607,11 +607,11 @@ list(
   ),
   tar_target(
     name = original_lost,
-    command = filefjell_simplified |> 
-      mutate(presence = ifelse(!is.na(distance), 1, 0)) |> 
-      select(!c(height:bedrock, distance)) |> 
-      pivot_wider(names_from = year, values_from = presence) |> 
-      filter(!is.na(first)) |> 
+    command = filefjell_simplified |>
+      mutate(presence = ifelse(!is.na(distance), 1, 0)) |>
+      select(!c(height:bedrock, distance)) |>
+      pivot_wider(names_from = year, values_from = presence) |>
+      filter(!is.na(first)) |>
       mutate(lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
              lost2 = ifelse(!is.na(second) & is.na(third), 1, 0)) |>
       select(!c(first:third)) |>
