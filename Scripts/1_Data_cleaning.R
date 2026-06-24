@@ -230,7 +230,9 @@ filefjell_data_clean <- filefjell_1972_clean |>
   rbind(filefjell_2008_2009_clean) |>
   mutate(weather = NA) |>
   relocate(weather, .after = date) |>
-  rbind(filefjell_2024_2025_clean |> select(!type:svar))
+  rbind(filefjell_2024_2025_clean |> select(!type:svar)) |>
+  mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
+  arrange(year, summit, specialisation, species)
 
 habitat_species_clean <- filefjell_2024_2025_clean |>
   select(summit, type, species:functional) |>
