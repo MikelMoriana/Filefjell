@@ -464,7 +464,7 @@ list(
       summarise(.by = c(year, summit, specialisation), richness = n())
   ),
   tar_target(
-    name = richness_overview_specialisation,
+    name = richness_overview,
     command = richness |>
       pivot_wider(names_from = year, values_from = richness, values_fill = 0) |>
       mutate(change1 = case_when(second > first ~ "Increase",
@@ -477,7 +477,7 @@ list(
   ),
   tar_target(
     name = richness_summits_ft,
-    command = richness_overview_specialisation |>
+    command = richness_overview |>
       select(!first:third) |>
       pivot_wider(names_from = specialisation, values_from = change1:change2) |>
       mutate(period1 = case_when(change1_alpine == "Increase" & change1_generalist == "Increase" ~ "++",
@@ -625,7 +625,7 @@ list(
       mutate(dec_rate = 10 * value / time)
   ),
   tar_target(
-    name = orilost_modh,
+    name = orilost_mod,
     command = glmmTMB(
       dec_rate ~
         period * specialisation + (1 | summit),
@@ -635,7 +635,7 @@ list(
   ),
   tar_target(
     name = orilost_results,
-    command = orilost_modh |>
+    command = orilost_mod |>
       mod_summary()
   ),
   # New and lost species----
