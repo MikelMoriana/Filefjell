@@ -65,18 +65,18 @@ status <- filefjell_simplified |>
     pivot_wider(names_from = year, values_from = presence, values_fill = 0)
 
 flows_all <- status |>
-  mutate(type12 = case_when(first  == 1 & second == 1 ~ "Remained",
+  mutate(type12 = case_when(first  == 1 & second == 1 ~ "Persisted",
                             first  == 1 & second == 0 ~ "Lost",
                             first  == 0 & second == 1 ~ "New",
                             first  == 0 & second == 0 ~ "Absent"),
-         type23 = case_when(second == 1 & third  == 1 ~ "Remained",
+         type23 = case_when(second == 1 & third  == 1 ~ "Persisted",
                             second == 1 & third  == 0L ~ "Lost",
                             second == 0 & third  == 1 ~ "New",
                             second == 0 & third == 0 ~ "Absent")) |>
   count(first, second, third, type12, type23, name = "n") |>
   mutate(flow_id = row_number(),
-         type12 = factor(type12, levels = c("Remained","Lost","New","Absent")),
-         type23 = factor(type23, levels = c("Remained","Lost","New","Absent")))
+         type12 = factor(type12, levels = c("Persisted","Lost","New","Absent")),
+         type23 = factor(type23, levels = c("Persisted","Lost","New","Absent")))
 
 lodes_12 <- flows_all |>
   select(flow_id, n, first, second, type12) |>
@@ -607,7 +607,7 @@ orilost_generalists
 
 new_lost <- filefjell_simplified |>
   pivot_wider(names_from = year, values_from = distance) |>
-  mutate(status = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "remained",
+  mutate(status = case_when(!is.na(first) & !is.na(second) & !is.na(third) ~ "persisted",
                             !is.na(first) & !is.na(second) & is.na(third) ~ "lost_2",
                             !is.na(first) & is.na(second) & !is.na(third) ~ "reappeared",
                             !is.na(first) & is.na(second) & is.na(third) ~ "lost_1",
@@ -615,7 +615,7 @@ new_lost <- filefjell_simplified |>
                             is.na(first) & !is.na(second) & is.na(third) ~ "redisappeared",
                             is.na(first) & is.na(second) & !is.na(third) ~ "new_2")) |>
   summarise(.by = c("species", "specialisation", "functional", "status"), total = n()) |>
-  mutate(status = factor(status, levels = c("remained", "new_1", "new_2", "reappeared", "redisappeared", "lost_1", "lost_2"))) |>
+  mutate(status = factor(status, levels = c("persisted", "new_1", "new_2", "reappeared", "redisappeared", "lost_1", "lost_2"))) |>
   arrange(status) |>
   pivot_wider(names_from = status, values_from = total, values_fill = 0) |>
   arrange(species)
@@ -642,7 +642,7 @@ disappeared <-  new_lost |>
 ## Tables
 
 winners_ft <- winners |>
-  select(species, specialisation, remained:new_2) |>
+  select(species, specialisation, persisted:new_2) |>
   arrange(specialisation) |>
   mutate(dispersal = case_when(species == "Ant_dio" ~ "Wind",
                                species == "Ath_dis" ~ "Wind",
@@ -674,7 +674,7 @@ winners_ft <- winners |>
                     dispersal = "Primary dispersal\nmechanism",
                     new_1 = "# Summits new\n1972\u20132008/09",
                     new_2 = "# Summits new\n2008/09\u20132024/25",
-                    remained = "# Summits remained\n1972\u20132024/25") |>
+                    persisted = "# Summits persisted\n1972\u20132024/25") |>
   italic(part = "body", j = 1) |>
   hline(i = 4) |>
   align(part = "all", j = 4:6, align = "center") |>
@@ -713,7 +713,7 @@ disappeared_ft<- disappeared |>
                                 functional == "dwarf_shrub" ~ "Dwarf shrub",
                                 functional == "pteridophyte" ~ "Pteridophyte")) |>
   relocate(c(lost_1, lost_2), .after = functional) |>
-  rename(Species = species, Specialisation = specialisation, Functional = functional, 'Lost 2008/09' = lost_1, 'Lost 2024/25' = lost_2, "Remained" = remained, "New 2008/09" = new_1, "New 2024/25" = new_2, "Reappeared" = reappeared, "Re-disappeared" = redisappeared) |>
+  rename(Species = species, Specialisation = specialisation, Functional = functional, 'Lost 2008/09' = lost_1, 'Lost 2024/25' = lost_2, "Persisted" = persisted, "New 2008/09" = new_1, "New 2024/25" = new_2, "Reappeared" = reappeared, "Re-disappeared" = redisappeared) |>
   clean_ft() |>
   italic(part = "body", j = 1) |>
   align(part = "body", j = -(1:3), align = "center") |>
@@ -1325,6 +1325,7 @@ hab_perc_gg <- hab_area |>
        x = NULL,
        y = NULL) +
   scale_x_discrete(labels = adj_label) +
+  scale_y_continuous(limits = c(0, 38.05)) +
   theme_minimal() +
   theme(text = element_text(size = 11, family = "serif"),
         plot.title = element_text(size = 9, hjust = 0.5),
@@ -1340,6 +1341,7 @@ hab_new_total_gg <- hab_new_prop_v |>
        x = NULL,
        y = NULL) +
   scale_x_discrete(labels = adj_label) +
+  scale_y_continuous(limits = c(0, 38.05)) +
   theme_minimal() +
   theme(text = element_text(size = 11, family = "serif"),
         plot.title = element_text(size = 9, hjust = 0.5),
@@ -1359,7 +1361,7 @@ hab_new_prop_gg <- hab_new_prop_v |>
        x = NULL,
        y = NULL) +
   scale_x_discrete(labels = adj_label) +
-  ylim(0, 18.1) +
+  scale_y_continuous(limits = c(0, 19.025)) +
   theme_minimal() +
   theme(text = element_text(size = 11, family = "serif"),
         plot.title = element_text(size = 9, hjust = 0.5),
