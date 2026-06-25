@@ -90,7 +90,7 @@ adj_label <- c(richness = "Species<br>richness",
                T7 = "Snowbeds",
                V6 = "Wet snowbeds")
 
-alluvial_palette <- c("Remained" = "#4DAF4A",
+alluvial_palette <- c("Persisted" = "#4DAF4A",
                       "Lost" = "#D95F02",
                       "New" = "#1F78B4", # 66C2A5, 1F78B4
                       "Absent" = "#CCCCCC",
