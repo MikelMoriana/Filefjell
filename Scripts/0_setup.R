@@ -40,11 +40,9 @@ data_cleaning <- function(data, summit_data_tidy, filefjell_species) {
     # We tidy the data
     clean_names() %>%
     relocate(year) %>%
-    rename(any_of(c(summit = "top", weather = "vaer"))) %>%
+    rename(any_of(c(summit = "top"))) %>%
     mutate(summit = str_replace_all(summit, " ", "_"),
            across(any_of("date"), ~ dmy(.x)),
-           across(any_of("weather"), ~ str_replace_all(.x, c(" \\+ " = "_", ", " = "_", " " = "_", "/" = "_"))),
-           across(any_of("recorder"), ~ str_replace_all(.x, c(" \\+ " = "_", "\\+" = "_"))),
            across(any_of("species"), ~ str_replace_all(.x, c(" " = "_", "\\." = "")))) %>%
     # We correct the summit data
     left_join(summit_data_tidy, by = "summit") %>%
