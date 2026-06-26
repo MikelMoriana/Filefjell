@@ -675,6 +675,7 @@ winners_ft <- winners |>
                     new_1 = "# Summits new\n1972\u20132008/09",
                     new_2 = "# Summits new\n2008/09\u20132024/25",
                     persisted = "# Summits persisted\n1972\u20132024/25") |>
+  fontsize(part = "body", size = 14) |>
   italic(part = "body", j = 1) |>
   hline(i = 4) |>
   align(part = "all", j = 4:6, align = "center") |>
