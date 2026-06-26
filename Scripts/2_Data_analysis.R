@@ -22,7 +22,7 @@ summit_periods <- filefjell_data_clean |>
   pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "time")
 
 filefjell_simplified <- filefjell_data_clean |>
-  select(!c(date:recorder)) |>
+  select(!c(height:date)) |>
   mutate(year = case_when(year == 1972 ~ "first",
                           year %in% c(2008, 2009) ~ "second",
                           year %in% c(2024, 2025) ~ "third"))
@@ -522,7 +522,7 @@ lostrate_generalists
 
 original_lost <- filefjell_simplified |>
   mutate(presence = ifelse(!is.na(distance), 1, 0)) |>
-  select(!c(height:bedrock, distance)) |>
+  select(!distance) |>
   pivot_wider(names_from = year, values_from = presence) |>
   filter(!is.na(first)) |>
   mutate(lost1 = ifelse(!is.na(first) & is.na(second), 1, 0),
@@ -574,6 +574,7 @@ orilost_results$emmeans_ft |> delete_columns(j = c(4, 5, 8))
 orilost_results$contrast_ft |> delete_columns(j = c(3, 4, 7))
 
 lost_results$emmeans_ft
+
 
 # Across groups
 
@@ -690,7 +691,6 @@ winners_ft |> save_as_image(path = "Results/Winners.png", res = 300)
 
 
 disappeared_ft<- disappeared |>
-  # select(species, specialisation, functional, lost_1, lost_2) |>
   mutate(species = case_when(species == "Alc_glo" ~ "Alchemilla glomerulans",
                              species == "Ant_odo" ~ "Anthoxantum odoratum",
                              species == "Arc_uva" ~ "Arctostaphylos uva-ursi",
