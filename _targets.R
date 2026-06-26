@@ -710,282 +710,282 @@ list(
       filter(is.na(second) & !is.na(third)) |>
       mutate(status = "new") |>
       select(summit, species, status)
+    ),
+  # Altitude----
+  tar_target(
+    name = altitude_rate,
+    command = filefjell_simplified |>
+      pivot_wider(names_from = year, values_from = distance) |>
+      mutate(period1 = (second - first) * (-1),
+             period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
+      select(!c(first:third)) |>
+      pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
+      filter(!is.na(change)) |>
+      left_join(summit_periods, by = c("summit", "period")) |>
+      mutate(dec_rate = 10 * change / time)
+  ),
+  tar_target(
+    name = priors_t,
+    command = c(
+      prior(normal(0, 5), class = "Intercept"),
+      prior(normal(0, 5), class = "b"),
+      prior(exponential(0.3), class = "sd"),
+      prior(gamma(2, 0.1), class = "nu")
     )
-  # # Altitude----
-  # tar_target(
-  #   name = altitude_rate,
-  #   command = filefjell_simplified |>
-  #     pivot_wider(names_from = year, values_from = distance) |>
-  #     mutate(period1 = (second - first) * (-1),
-  #            period2 = (third - second) * (-1)) |> # Change the sign so that a positive value indicates upwards movement
-  #     select(!c(first:third)) |>
-  #     pivot_longer(cols = c(period1, period2), names_to = "period", values_to = "change") |>
-  #     filter(!is.na(change)) |>
-  #     left_join(summit_periods, by = c("summit", "period")) |>
-  #     mutate(dec_rate = 10 * change / time)
-  # ),
-  # tar_target(
-  #   name = priors_t,
-  #   command = c(
-  #     prior(normal(0, 5), class = "Intercept"),
-  #     prior(normal(0, 5), class = "b"),
-  #     prior(exponential(0.3), class = "sd"),
-  #     prior(gamma(2, 0.1), class = "nu")
-  #   )
-  # ),
-  # tar_target(
-  #   name = altitude_bay,
-  #   command = brm(
-  #     bf(dec_rate ~
-  #          period * specialisation + (1|summit) + (1|species),
-  #        sigma ~ period),
-  #     family = student(),
-  #     prior = priors_t,
-  #     data = altitude_rate,
-  #     chains = 4, iter = 4000, seed = 811,
-  #     control = list(adapt_delta = 0.95)
-  #   )
-  # ),
-  # tar_target(
-  #   name = altitude_results,
-  #   command = altitude_bay |>
-  #     mod_summary()
-  # ),
-  # # Rates results----
-  # tar_target(
-  #   name = richness_figure,
-  #   command = richness_results$emmeans_df |>
-  #   gg_results() +
-  #   scale_x_continuous(limits = c(-3.12, 5.2),
-  #                      labels = NULL) +
-  #   labs(x = NULL, y = adj_label["richness"]) +
-  #   theme(plot.margin = margin(0, 0, 10, 0))
-  # ),
-  # tar_target(
-  #   name = new_figure,
-  #   command = new_results$emmeans_df |>
-  #   gg_results() +
-  #   scale_x_continuous(limits = c(-3.12, 5.2),
-  #                      labels = NULL) +
-  #   labs(x = NULL, y = adj_label["new"]) +
-  #   theme(plot.margin = margin(0, 0, 10, 0))
-  # ),
-  # tar_target(
-  #   name = lost_figure,
-  #   command = lost_results$emmeans_df |>
-  #   gg_results() +
-  #   scale_x_continuous(limits = c(-3.12, 5.2)) +
-  #   labs(x = "Rate (species&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["lost"]) +
-  #   theme(axis.title.x = element_markdown()) +
-  #   theme(plot.margin = margin(0, 0, 10, 0))
-  # ),
-  # tar_target(
-  #   name = altitude_figure,
-  #   command = altitude_results$emmeans_df |>
-  #   gg_results() +
-  #   scale_x_continuous(limits = c(-0.78, 1.3)) +
-  #   labs(x = "Rate (metres&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["altitude"]) +
-  #   theme(axis.title.x = element_markdown(),
-  #         plot.margin = margin(10, 0, 0, 0))
-  # ),
-  # tar_target(
-  #   name = rates_figure,
-  #   command = ggarrange(
-  #   plotlist = list(richness_figure, new_figure, lost_figure, altitude_figure),
-  #   ncol = 1,
-  #   nrow = 4,
-  #   align = "v",
-  #   common.legend = TRUE,
-  #   heights = c(1, 1, 1.35, 1.35)
-  #   )
-  # ),
-  # # Habitats----
-  # tar_target(
-  #   name = habitat_area,
-  #   command = habitat_species_clean |>
-  #   select(summit, habitat) |>
-  #   distinct() |>
-  #   full_join(habitat_cover, by = c("summit", "habitat")) |>
-  #   mutate(habitat_decare = ifelse(is.na(habitat_decare), 0.25, habitat_decare)) |>
-  #   summarise(.by = habitat, habitat_decare = sum(habitat_decare)) |>
-  #   mutate(percentage = 100 * habitat_decare / sum(habitat_decare)) |>
-  #   arrange(habitat)
-  # ),
-  # tar_target(
-  #   name = habitat_new,
-  #   command = habitat_species_clean |>
-  #   left_join(new_species_2024_2025, by = c("summit", "species")) |>
-  #   filter(status == "new") |>
-  #   select(summit, habitat, specialisation, species) |>
-  #   arrange(summit, habitat, specialisation, species) |>
-  #   summarise(.by = c(habitat, specialisation), total = n()) |>
-  #   arrange(habitat, specialisation)
-  # ),
-  # tar_target(
-  #   name = habitat_new_proportions,
-  #   command = habitat_new |>
-  #   pivot_wider(names_from = specialisation, values_from = total, values_fill = 0) |>
-  #   right_join(habitat_area, by = "habitat") |>
-  #   mutate(across(alpine:generalist, ~ ifelse(is.na(.x), 0, .x)),
-  #          total_nr = alpine + generalist,
-  #          total_byha = total_nr / (habitat_decare / 10),
-  #          alpine_byha = alpine / (habitat_decare / 10),
-  #          generalist_byha = generalist / (habitat_decare / 10)) |>
-  #   select(!habitat_decare) |>
-  #   relocate(c(total_nr, total_byha), .after = habitat) |>
-  #   relocate(alpine_byha, .after = alpine) |>
-  #   relocate(generalist_byha, .after = generalist) |>
-  #   mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
-  #   arrange(habitat)
-  # ),
-  # tar_target(
-  #   name = habitat_new_header,
-  #   command = tibble(
-  #     col_keys = c("habitat",
-  #                  "total",
-  #                  "total_nr",
-  #                  "total_byha",
-  #                  "alpine",
-  #                  "alpine_nr",
-  #                  "alpine_byha",
-  #                  "generalist",
-  #                  "generalist_nr",
-  #                  "generalist_byha",
-  #                  "percentage"),
-  #     header1 = c("Habitat",
-  #                 "Total new occurrences",
-  #                 "Total new occurrences",
-  #                 "Total new occurrences",
-  #                 "New specialists",
-  #                 "New specialists",
-  #                 "New specialists",
-  #                 "New generalists",
-  #                 "New generalists",
-  #                 "New generalists",
-  #                 "% Total\nsummit area"),
-  #     header2 = c("Habitat",
-  #                 "Total new occurrences",
-  #                 "#",
-  #                 "Per_ area",
-  #                 "Specialists",
-  #                 "#",
-  #                 "Per_area",
-  #                 "Generalists",
-  #                 "#",
-  #                 "Per_area",
-  #                 "% Total\nsummit area")
-  #   )
-  # ),
-  # tar_target(
-  #   name = habitat_new_proportions_ft,
-  #   command = habitat_new_proportions |>
-  #     mutate(habitat = case_when(habitat == "T1" ~ "Bare rock",
-  #                                habitat == "T27" ~ "Boulder field",
-  #                                habitat == "T13" ~ "Scree",
-  #                                habitat == "T14" ~ "Ridge",
-  #                                habitat == "T7" ~ "Snowbed",
-  #                                habitat == "V6" ~ "Wet snowbed",
-  #                                habitat == "T3" ~ "Alpine heath",
-  #                                habitat == "T22" ~ "Alpine grassland"),
-  #            across(where(is.numeric), ~ round(., 1))) |>
-  #     rename("alpine_nr" = "alpine", "generalist_nr" = "generalist") |>
-  #     flextable() |>
-  #     separate_header() |>
-  #     set_header_df(habitat_new_header) |>
-  #     compose(part = "header", i = 2, j = c(3, 5, 7),
-  #             value = as_paragraph("# / 10,000 m", as_sup("2"))) |>
-  #     merge_h(part = "header", i = 1) |>
-  #     merge_v(part = "header", j = c(1, 8)) |>
-  #     bg(part = "header", bg = "black") |>
-  #     color(part = "header", color = "white") |>
-  #     bold(part = "header") |>
-  #     bg(part = "body", bg = "white") |>
-  #     color(part = "body", color = "black") |>
-  #     align(part = "all", j = -1, align = "center") |>
-  #     vline(j = c(1, 3, 5, 7)) |>
-  #     flextable::font(part = "all", fontname = "Times New Roman") |>
-  #     fontsize(part = "header", size = 13) |>
-  #     fontsize(part = "body", size = 12) |>
-  #     autofit()
-  #   ),
-  # tar_target(
-  #   name = habitat_new_proportions_v,
-  #   command = habitat_area |>
-  #     select(habitat) |>
-  #     distinct() |>
-  #     crossing(specialisation = levels(habitat_new$specialisation)) |>
-  #     left_join(habitat_new, by = c("habitat", "specialisation")) |>
-  #     mutate(total = coalesce(total, 0)) |>
-  #     left_join(habitat_area, by = "habitat") |>
-  #     mutate(total_byha = total / (habitat_decare / 10)) |>
-  #     select(!habitat_decare) |>
-  #     relocate(total_byha, .after = total) |>
-  #     mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
-  #     arrange(habitat) |>
-  #     mutate(across(where(is.numeric), ~ round(., 1)))
-  # ),
-  # tar_target(
-  #   name = habitat_percentage_gg,
-  #   command = habitat_area |>
-  #     mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
-  #     ggplot() +
-  #     geom_col(aes(x = habitat, y = percentage)) +
-  #     labs(title = "Estimated % area across all summits",
-  #          x = NULL,
-  #          y = NULL) +
-  #     scale_x_discrete(labels = adj_label) +
-  #     scale_y_continuous(limits = c(0, 38.05)) +
-  #     theme_minimal() +
-  #     theme(text = element_text(size = 11, family = "serif"),
-  #           plot.title = element_text(size = 9, hjust = 0.5),
-  #           axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
-  #           panel.grid.major.x = element_blank(),
-  #           panel.grid.minor.y = element_blank())
-  # ),
-  # tar_target(
-  #   name = habitat_new_total_gg,
-  #   command = habitat_new_proportions_v |>
-  #     ggplot() +
-  #     geom_col(aes(x = habitat, y = total, fill = specialisation)) +
-  #     scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-  #     labs(title = "# New species occurrences",
-  #          x = NULL,
-  #          y = NULL) +
-  #     scale_x_discrete(labels = adj_label) +
-  #     scale_y_continuous(limits = c(0, 38.05)) +
-  #     theme_minimal() +
-  #     theme(text = element_text(size = 11, family = "serif"),
-  #           plot.title = element_text(size = 9, hjust = 0.5),
-  #           axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
-  #           panel.grid.major.x = element_blank(),
-  #           panel.grid.minor.y = element_blank(),
-  #           legend.position = "top",
-  #           legend.title = element_blank(),
-  #           legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)),
-  #           legend.box.margin = margin(l = 180))
-  # ),
-  # tar_target(
-  #   name = habitat_new_proportions_gg,
-  #   command = habitat_new_proportions_v |>
-  #     ggplot() +
-  #     geom_col(aes(x = habitat, y = total_byha, fill = specialisation)) +
-  #     scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-  #     labs(title = expression("# New species occurrences / 10 000 m"^2),
-  #          x = NULL,
-  #          y = NULL) +
-  #     scale_x_discrete(labels = adj_label) +
-  #     scale_y_continuous(limits = c(0, 19.025)) +
-  #     theme_minimal() +
-  #     theme(text = element_text(size = 11, family = "serif"),
-  #           plot.title = element_text(size = 9, hjust = 0.5),
-  #           axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
-  #           panel.grid.major.x = element_blank(),
-  #           panel.grid.minor.y = element_blank())
-  # ),
-  # tar_target(
-  #   name = habitat_percentage_new_gg,
-  #   command = ggarrange(habitat_percentage_gg, habitat_new_total_gg, habitat_new_proportions_gg,
-  #                       ncol = 3, align = "h", common.legend = TRUE)
-  # )
+  ),
+  tar_target(
+    name = altitude_bay,
+    command = brm(
+      bf(dec_rate ~
+           period * specialisation + (1|summit) + (1|species),
+         sigma ~ period),
+      family = student(),
+      prior = priors_t,
+      data = altitude_rate,
+      chains = 4, iter = 4000, seed = 811,
+      control = list(adapt_delta = 0.95)
+    )
+  ),
+  tar_target(
+    name = altitude_results,
+    command = altitude_bay |>
+      mod_summary()
+  ),
+  # Rates results----
+  tar_target(
+    name = richness_figure,
+    command = richness_results$emmeans_df |>
+    gg_results() +
+    scale_x_continuous(limits = c(-3.12, 5.2),
+                       labels = NULL) +
+    labs(x = NULL, y = adj_label["richness"]) +
+    theme(plot.margin = margin(0, 0, 10, 0))
+  ),
+  tar_target(
+    name = new_figure,
+    command = new_results$emmeans_df |>
+    gg_results() +
+    scale_x_continuous(limits = c(-3.12, 5.2),
+                       labels = NULL) +
+    labs(x = NULL, y = adj_label["new"]) +
+    theme(plot.margin = margin(0, 0, 10, 0))
+  ),
+  tar_target(
+    name = lost_figure,
+    command = lost_results$emmeans_df |>
+    gg_results() +
+    scale_x_continuous(limits = c(-3.12, 5.2)) +
+    labs(x = "Rate (species&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["lost"]) +
+    theme(axis.title.x = element_markdown()) +
+    theme(plot.margin = margin(0, 0, 10, 0))
+  ),
+  tar_target(
+    name = altitude_figure,
+    command = altitude_results$emmeans_df |>
+    gg_results() +
+    scale_x_continuous(limits = c(-0.78, 1.3)) +
+    labs(x = "Rate (metres&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["altitude"]) +
+    theme(axis.title.x = element_markdown(),
+          plot.margin = margin(10, 0, 0, 0))
+  ),
+  tar_target(
+    name = rates_figure,
+    command = ggarrange(
+    plotlist = list(richness_figure, new_figure, lost_figure, altitude_figure),
+    ncol = 1,
+    nrow = 4,
+    align = "v",
+    common.legend = TRUE,
+    heights = c(1, 1, 1.35, 1.35)
+    )
+  ),
+  # Habitats----
+  tar_target(
+    name = habitat_area,
+    command = habitat_species_clean |>
+    select(summit, habitat) |>
+    distinct() |>
+    full_join(habitat_cover, by = c("summit", "habitat")) |>
+    mutate(habitat_decare = ifelse(is.na(habitat_decare), 0.25, habitat_decare)) |>
+    summarise(.by = habitat, habitat_decare = sum(habitat_decare)) |>
+    mutate(percentage = 100 * habitat_decare / sum(habitat_decare)) |>
+    arrange(habitat)
+  ),
+  tar_target(
+    name = habitat_new,
+    command = habitat_species_clean |>
+    left_join(new_species_2024_2025, by = c("summit", "species")) |>
+    filter(status == "new") |>
+    select(summit, habitat, specialisation, species) |>
+    arrange(summit, habitat, specialisation, species) |>
+    summarise(.by = c(habitat, specialisation), total = n()) |>
+    arrange(habitat, specialisation)
+  ),
+  tar_target(
+    name = habitat_new_proportions,
+    command = habitat_new |>
+    pivot_wider(names_from = specialisation, values_from = total, values_fill = 0) |>
+    right_join(habitat_area, by = "habitat") |>
+    mutate(across(alpine:generalist, ~ ifelse(is.na(.x), 0, .x)),
+           total_nr = alpine + generalist,
+           total_byha = total_nr / (habitat_decare / 10),
+           alpine_byha = alpine / (habitat_decare / 10),
+           generalist_byha = generalist / (habitat_decare / 10)) |>
+    select(!habitat_decare) |>
+    relocate(c(total_nr, total_byha), .after = habitat) |>
+    relocate(alpine_byha, .after = alpine) |>
+    relocate(generalist_byha, .after = generalist) |>
+    mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
+    arrange(habitat)
+  ),
+  tar_target(
+    name = habitat_new_header,
+    command = tibble(
+      col_keys = c("habitat",
+                   "total",
+                   "total_nr",
+                   "total_byha",
+                   "alpine",
+                   "alpine_nr",
+                   "alpine_byha",
+                   "generalist",
+                   "generalist_nr",
+                   "generalist_byha",
+                   "percentage"),
+      header1 = c("Habitat",
+                  "Total new occurrences",
+                  "Total new occurrences",
+                  "Total new occurrences",
+                  "New specialists",
+                  "New specialists",
+                  "New specialists",
+                  "New generalists",
+                  "New generalists",
+                  "New generalists",
+                  "% Total\nsummit area"),
+      header2 = c("Habitat",
+                  "Total new occurrences",
+                  "#",
+                  "Per_ area",
+                  "Specialists",
+                  "#",
+                  "Per_area",
+                  "Generalists",
+                  "#",
+                  "Per_area",
+                  "% Total\nsummit area")
+    )
+  ),
+  tar_target(
+    name = habitat_new_proportions_ft,
+    command = habitat_new_proportions |>
+      mutate(habitat = case_when(habitat == "T1" ~ "Bare rock",
+                                 habitat == "T27" ~ "Boulder field",
+                                 habitat == "T13" ~ "Scree",
+                                 habitat == "T14" ~ "Ridge",
+                                 habitat == "T7" ~ "Snowbed",
+                                 habitat == "V6" ~ "Wet snowbed",
+                                 habitat == "T3" ~ "Alpine heath",
+                                 habitat == "T22" ~ "Alpine grassland"),
+             across(where(is.numeric), ~ round(., 1))) |>
+      rename("alpine_nr" = "alpine", "generalist_nr" = "generalist") |>
+      flextable() |>
+      separate_header() |>
+      set_header_df(habitat_new_header) |>
+      compose(part = "header", i = 2, j = c(3, 5, 7),
+              value = as_paragraph("# / 10,000 m", as_sup("2"))) |>
+      merge_h(part = "header", i = 1) |>
+      merge_v(part = "header", j = c(1, 8)) |>
+      bg(part = "header", bg = "black") |>
+      color(part = "header", color = "white") |>
+      bold(part = "header") |>
+      bg(part = "body", bg = "white") |>
+      color(part = "body", color = "black") |>
+      align(part = "all", j = -1, align = "center") |>
+      vline(j = c(1, 3, 5, 7)) |>
+      flextable::font(part = "all", fontname = "Times New Roman") |>
+      fontsize(part = "header", size = 13) |>
+      fontsize(part = "body", size = 12) |>
+      autofit()
+    ),
+  tar_target(
+    name = habitat_new_proportions_v,
+    command = habitat_area |>
+      select(habitat) |>
+      distinct() |>
+      crossing(specialisation = levels(habitat_new$specialisation)) |>
+      left_join(habitat_new, by = c("habitat", "specialisation")) |>
+      mutate(total = coalesce(total, 0)) |>
+      left_join(habitat_area, by = "habitat") |>
+      mutate(total_byha = total / (habitat_decare / 10)) |>
+      select(!habitat_decare) |>
+      relocate(total_byha, .after = total) |>
+      mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
+      arrange(habitat) |>
+      mutate(across(where(is.numeric), ~ round(., 1)))
+  ),
+  tar_target(
+    name = habitat_percentage_gg,
+    command = habitat_area |>
+      mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
+      ggplot() +
+      geom_col(aes(x = habitat, y = percentage)) +
+      labs(title = "Estimated % area across all summits",
+           x = NULL,
+           y = NULL) +
+      scale_x_discrete(labels = adj_label) +
+      scale_y_continuous(limits = c(0, 38.05)) +
+      theme_minimal() +
+      theme(text = element_text(size = 11, family = "serif"),
+            plot.title = element_text(size = 9, hjust = 0.5),
+            axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor.y = element_blank())
+  ),
+  tar_target(
+    name = habitat_new_total_gg,
+    command = habitat_new_proportions_v |>
+      ggplot() +
+      geom_col(aes(x = habitat, y = total, fill = specialisation)) +
+      scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
+      labs(title = "# New species occurrences",
+           x = NULL,
+           y = NULL) +
+      scale_x_discrete(labels = adj_label) +
+      scale_y_continuous(limits = c(0, 38.05)) +
+      theme_minimal() +
+      theme(text = element_text(size = 11, family = "serif"),
+            plot.title = element_text(size = 9, hjust = 0.5),
+            axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor.y = element_blank(),
+            legend.position = "top",
+            legend.title = element_blank(),
+            legend.text = element_text(margin = margin(l = 9, r = 20, b = 4)),
+            legend.box.margin = margin(l = 180))
+  ),
+  tar_target(
+    name = habitat_new_proportions_gg,
+    command = habitat_new_proportions_v |>
+      ggplot() +
+      geom_col(aes(x = habitat, y = total_byha, fill = specialisation)) +
+      scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
+      labs(title = expression("# New species occurrences / 10 000 m"^2),
+           x = NULL,
+           y = NULL) +
+      scale_x_discrete(labels = adj_label) +
+      scale_y_continuous(limits = c(0, 19.025)) +
+      theme_minimal() +
+      theme(text = element_text(size = 11, family = "serif"),
+            plot.title = element_text(size = 9, hjust = 0.5),
+            axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor.y = element_blank())
+  ),
+  tar_target(
+    name = habitat_percentage_new_gg,
+    command = ggarrange(habitat_percentage_gg, habitat_new_total_gg, habitat_new_proportions_gg,
+                        ncol = 3, align = "h", common.legend = TRUE)
+  )
   )
 
