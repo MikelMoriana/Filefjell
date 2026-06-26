@@ -91,7 +91,7 @@ filefjell_1972_clean <- filefjell_1972_2009 |>
   left_join(visit_dates |>
               select(!c(Year2:Data2)),
             by = c("Summit", "Year")) |>
-  pivot_longer(cols = !c(Summit:Year, Date, Recorder),
+  pivot_longer(cols = !c(Summit:Year, Date),
                names_to = "species",
                values_to = "distance",
                values_drop_na = TRUE) |>
@@ -105,17 +105,14 @@ filefjell_2008_2009_clean <- filefjell_1972_2009 |>
               filter(Year %in% c(2008, 2009)) |>
               select(!c(Year2:Data2)),
             by = c("Summit")) |>
-  pivot_longer(cols = !c(Summit, Height, Year:Recorder),
+  pivot_longer(cols = !c(Summit, Height, Year:Date),
                names_to = "species",
                values_to = "distance",
                values_drop_na = TRUE) |>
   data_cleaning(summit_data_tidy, filefjell_species)
 
 filefjell_2024_2025_clean <- filefjell_2024 |>
-  rbind(filefjell_2025 |>
-          mutate(Rareness = NA,
-                 Comments = NA,
-                 Svar = NA)) |>
+  rbind(filefjell_2025) |>
   # For simplicity's sake, we assume the species found in Storeknippa in 2025 were in the exact same location in 2024
   mutate(Year = ifelse(Top == "Storeknippa", 2024, Year)) |>
   # We calculate distance
@@ -228,9 +225,7 @@ habitat_cover <- types_with_species_simplified |>
 
 filefjell_data_clean <- filefjell_1972_clean |>
   rbind(filefjell_2008_2009_clean) |>
-  mutate(weather = NA) |>
-  relocate(weather, .after = date) |>
-  rbind(filefjell_2024_2025_clean |> select(!type:svar)) |>
+  rbind(filefjell_2024_2025_clean |> select(!type)) |>
   mutate(summit = factor(summit, levels = c("Berdalseken", "Suletinden", "Unnamed", "Storeknippa", "Graanosi", "Loppenosi", "Graveggi", "Krekanosi", "Rjupeskareggen", "Frostdalsnosi", "Krekanosi_S", "Slettningseggi", "Krekahoegdi"))) |>
   arrange(year, summit, specialisation, species)
 
