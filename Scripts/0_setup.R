@@ -107,7 +107,7 @@ colour_mapping <-  list(
 mod_summary <- function(mod, seed = 811) {
   format_ft <- function(tbl, id_col) {
     tbl %>%
-      flextable %>%
+      flextable() %>%
       bg(part = "header", bg = "black") %>%
       color(part = "header", color = "white") %>%
       bold(part = "header") %>%
@@ -180,6 +180,7 @@ mod_summary <- function(mod, seed = 811) {
     vline(j = 1)
 
   return(list(
+    model_df = model_df,
     model_ft = model_ft,
     emmeans = emmeans,
     emmeans_df = emmeans_df,
