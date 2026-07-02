@@ -6,7 +6,7 @@ library(janitor)
 temperature <- read_csv2("data_raw/kyrkestolene_temp.csv")
 water <- read_csv2("data_raw/kyrkestolene_water.csv")
 # weather <- read_csv2("data_raw/kyrkjestolane_weather.csv",
-                     na = c("", "NA", "-"))
+                     # na = c("", "NA", "-"))
 # maristova <- read_csv2("data_raw/maristova_precip.csv")
 
 temp_water <- temperature |>
