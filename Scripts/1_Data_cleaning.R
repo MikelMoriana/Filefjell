@@ -28,6 +28,7 @@ summit_data_tidy <- summit_data |>
 
 
 # Species names----
+
 ## We check what species names are found in some of the surveys but not the others, and evaluate whether these are actually different species or different nomenclature or typos
 
 filefjell_1972_2009_species <- filefjell_1972_2009 |>
