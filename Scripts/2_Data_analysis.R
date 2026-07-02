@@ -3,6 +3,7 @@
 source("Scripts/0_setup.R")
 
 
+
 # General data----
 
 filefjell_data_clean <- tar_read(filefjell_data_clean)
@@ -220,6 +221,7 @@ species_records_plot |> ggsave(filename = "Species_records.png", path = "Results
 
 
 # Richness----
+
 ## Data
 
 richness <- filefjell_simplified |>
@@ -381,6 +383,7 @@ richrate_class # Generalists increased at a higher rate (0.69). p value = 0.61
 
 
 # Turnover----
+
 ## Data
 
 turnover <- filefjell_simplified |>
@@ -747,6 +750,7 @@ disappeared_ft |> save_as_image(path = "Results/Species_disappearing.png")
 
 
 # Uppermost occurrence----
+
 ## Data
 
 # Considering only species for which we have data (present two sampling times in a row)
