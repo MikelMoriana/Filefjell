@@ -633,6 +633,29 @@ list(
     command = orilost_mod |>
       mod_summary()
   ),
+  tar_target(
+    name = orilost_model_ft,
+    command = orilost_results$model_df |>
+      select(!c(SE, Statistic)) |>
+      mutate(p_value1 = ifelse(p_value > 0.001, round(p_value, 3), NA) |> as.character(),
+             p_value2 = ifelse(p_value < 0.001, "< 0.001", NA) |> as.character(),
+             across(where(is.numeric), ~ round(., 2))) |>
+      select(!p_value) |>
+      mutate(p_value = coalesce(p_value1, p_value2)) |>
+      select(!c(p_value1, p_value2)) |>
+      clean_ft() |>
+      set_header_labels(p_value = "p value",
+                        CI_lower = "CI Lower",
+                        CI_upper = "CI Upper") |>
+      compose(part = "body", j = 1, 
+              value = as_paragraph(c("Intercept", "Period 2", "Generalist", "Period 2 : Generalist"))) |>
+      bold(i = ~ ((CI_lower * CI_upper) > 0)) |>
+      hline(i = c(1, 3)) |>
+      align(part = "all", j = 2:5, align = "center") |>
+      fontsize(part = "header", size = 12) |>
+      fontsize(part = "body", size = 11) |>
+      autofit()
+  ),
   # New and lost species----
   tar_target(
     name = new_lost,
