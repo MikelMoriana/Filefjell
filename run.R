@@ -58,15 +58,6 @@ manual_positions <- tribble(
   "filefjell_simplified",          1100,      0,
   "summit_periods",                1300,   -100,
   
-  # Alluvial plot
-  "status",                        1300,    500,
-  "flows_all",                     1500,    350,
-  "strata",                        1500,    450,
-  "lodes_12",                      1700,    300,
-  "lodes_23",                      1700,    400,
-  "species_records_manually",      1500,    550,
-  "species_records_plot",          1900,    450,
-  
   # Richness rate
   "richness",                      1300,   -350,
   "richness_overview",             1500,   -450,
@@ -94,23 +85,33 @@ manual_positions <- tribble(
   "original_lost",                 1500,    -50,  
   "orilost_mod",                   1700,    -50,
   "orilost_results",               1900,    -50,
-  
-  # Winners
-  "new_lost",                      1500,    200,
-  "winners",                       1700,    200,
-  "winners_ft",                    1900,    200,
+  "orilost_model_ft",              1900,     50,
   
   # Altitude change
-  "altitude_rate",                 1500,     50,
-  "priors_t",                      1600,    100,
-  "altitude_bay",                  1700,     50,
-  "altitude_results",              1900,     50,
-  "altitude_figure",               2200,      0,
+  "altitude_rate",                 1500,    150,
+  "priors_t",                      1600,     50,
+  "altitude_bay",                  1700,    150,
+  "altitude_results",              1900,    150,
+  "altitude_figure",               2200,    100,
   
   "rates_figure",                  2400,   -150,
   
+  # Winners
+  "new_lost",                      1500,    300,
+  "winners",                       1700,    300,
+  "winners_ft",                    1900,    300,
+  
   #Results
   "mod_summary",                   2100,    -50,
+  
+  # Alluvial plot
+  "status",                        1300,    500,
+  "flows_all",                     1500,    450,
+  "strata",                        1500,    550,
+  "lodes_12",                      1700,    400,
+  "lodes_23",                      1700,    500,
+  "species_records_manually",      1700,    600,
+  "species_records_plot",          1900,    550,
   
   # Habitats
   "new_species_2024_2025",         1100,    600,
