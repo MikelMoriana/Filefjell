@@ -50,71 +50,77 @@ manual_positions <- tribble(
   "filefjell_1972_clean",           600,   -250,
   "filefjell_2008_2009_clean",      600,   -150,
   "filefjell_2024_2025_clean",      600,      0,
-  "filefjell_data_clean",           900,      0,
+  "filefjell_data_clean",           800,      0,
+  "summit_ft",                      500,    100,
   
   "types_with_species",             600,    400,
   
   # Datasets for analyses
-  "filefjell_simplified",          1100,      0,
-  "summit_periods",                1300,   -100,
+  "filefjell_simplified",          1000,      0,
+  "summit_periods",                1200,   -100,
   
   # Richness rate
-  "richness",                      1300,   -350,
-  "richness_overview",             1500,   -450,
-  "richness_summits_ft",           1700,   -450,
-  "richness_rate",                 1500,   -350,
-  "richness_mod",                  1700,   -350,
-  "richness_results",              1900,   -350,
-  "richness_figure",               2200,   -350,
+  "richness",                      1200,   -350,
+  "richness_overview",             1400,   -450,
+  "richness_summits_ft",           1600,   -450,
+  "richness_rate",                 1400,   -350,
+  "richness_mod",                  1600,   -350,
+  "richness_results",              2000,   -350,
+  "richness_figure",               2400,   -350,
   
-  "turnover",                      1300,   -200,
+  "turnover",                      1200,   -200,
   
   # New species
-  "new_rate",                      1500,   -250,
-  "new_mod",                       1700,   -250,
-  "new_results",                   1900,   -250,
-  "new_figure",                    2200,   -250,
+  "new_rate",                      1400,   -250,
+  "new_mod",                       1600,   -250,
+  "new_results",                   2000,   -250,
+  "new_figure",                    2400,   -250,
   
   # Lost species
-  "lost_rate",                     1500,   -150,
-  "lost_mod",                      1700,   -150,
-  "lost_results",                  1900,   -150,
-  "lost_figure",                   2200,   -150,
+  "lost_rate",                     1400,   -150,
+  "lost_mod",                      1600,   -150,
+  "lost_results",                  2000,   -150,
+  "lost_figure",                   2400,   -150,
   
   # Original - Lost species
-  "original_lost",                 1500,    -50,  
-  "orilost_mod",                   1700,    -50,
-  "orilost_results",               1900,    -50,
-  "orilost_model_ft",              1900,     50,
+  "original_lost",                 1400,    -50,  
+  "orilost_mod",                   1600,    -50,
+  "orilost_results",               2000,    -50,
+  "orilost_model_ft",              2000,     50,
   
   # Altitude change
-  "altitude_rate",                 1500,    150,
-  "priors_t",                      1600,     50,
-  "altitude_bay",                  1700,    150,
-  "altitude_results",              1900,    150,
-  "altitude_figure",               2200,    100,
+  "altitude_rate",                 1400,    150,
+  "priors_t",                      1500,     50,
+  "altitude_bay",                  1600,    150,
+  "altitude_results",              2000,    150,
+  "altitude_figure",               2400,    150,
   
-  "rates_figure",                  2400,   -150,
+  # Rates results
+  "rate_emmeans",                  2200,    -50,
+  "rate_emmeans_ft",               2400,    -50,
+  "rate_contrasts",                2200,     50,
+  "rate_contrasts_ft",             2400,     50,
+  "rates_figure",                  2600,   -150,
   
   # Winners
-  "new_lost",                      1500,    300,
-  "winners",                       1700,    300,
-  "winners_ft",                    1900,    300,
+  "new_lost",                      1400,    300,
+  "winners",                       1600,    300,
+  "winners_ft",                    1800,    300,
   
   #Results
-  "mod_summary",                   2100,    -50,
+  "mod_summary",                   1800,    -50,
   
   # Alluvial plot
-  "status",                        1300,    500,
-  "flows_all",                     1500,    450,
-  "strata",                        1500,    550,
-  "lodes_12",                      1700,    400,
-  "lodes_23",                      1700,    500,
-  "species_records_manually",      1700,    600,
-  "species_records_plot",          1900,    550,
+  "status",                        1200,    500,
+  "flows_all",                     1400,    450,
+  "strata",                        1400,    550,
+  "lodes_12",                      1600,    400,
+  "lodes_23",                      1600,    500,
+  "species_records_manually",      1600,    600,
+  "species_records_plot",          1800,    550,
   
   # Habitats
-  "new_species_2024_2025",         1100,    600,
+  "new_species_2024_2025",         1000,    600,
   "habitat_species_clean",         1000,    800,
   "habitat_new",                   1400,    700,
   "habitat_area",                  1400,    900,
