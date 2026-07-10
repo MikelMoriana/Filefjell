@@ -53,7 +53,8 @@ summit_ft <- summit_data |>
   align(part = "body", j = c(2, 3, 5, 6, 7), align = "center") |>
   autofit()
 summit_ft
-summit_ft |> save_as_image(path = "Results/Summit_overview.png", res = 300)
+summit_ft |> save_as_image(path = "Results/Summit_overview.png", res = 600)
+summit_ft |> save_as_docx(path = "Results/Summit_overview.docx")
 
 
 
@@ -198,7 +199,7 @@ species_records_plot <- ggplot() +
                width = 0) +
   geom_text(data = species_records_manually,
             aes(x = x, y = y, label = label),
-            family = "serif", size = 4) +
+            family = "sans", size = 3) +
   scale_fill_manual(values = alluvial_palette,
                     name   = "Between surveys") +
   scale_alpha_manual(values = c("light" = 0.6, "dark" = 0.9)) +
@@ -208,14 +209,14 @@ species_records_plot <- ggplot() +
                      expand = c(0.08, 0.05)) +
   labs(x = NULL,
        y = "Number of species records") +
-  theme_minimal(base_size = 12) +
+  theme_minimal() +
   theme(panel.grid.minor.x = element_blank(),
         panel.grid.major.x = element_blank(),
-        axis.title.y = element_markdown(margin = margin(r = 10)),
-        legend.position = "top",
-        text = element_text(size = 14, family = "serif"))
+        text = element_text(size = 10, family = "sans"),
+        axis.title.y = element_markdown(margin = margin(r = 6)),
+        legend.position = "top")
 species_records_plot
-species_records_plot |> ggsave(filename = "Species_records.png", path = "Results", width = 20, height = 15, units = "cm")
+species_records_plot |> ggsave(filename = "Species_records.png", path = "Results", width = 16.5, height = 10, units = "cm", dpi = 600)
 
 
 
@@ -277,11 +278,10 @@ rich_spe_ft <- richness_overview_specialisation |>
   hline(i = c(2, 3), border = officer::fp_border(color = "grey")) |>
   merge_v(j = 1) |>
   align(j = 3:4, align = "center") |>
-  fontsize(part = "header", size = 12) |>
-  fontsize(part = "body", size = 11) |>
   autofit()
 rich_spe_ft
-rich_spe_ft |> save_as_image(path = "Results/Richness_specialisation_number_summits.png", res = 300)
+rich_spe_ft |> save_as_image(path = "Results/Richness_specialisation_number_summits.png", res = 600)
+rich_spe_ft |> save_as_docx(path = "Results/Richness_specialisation_number_summits.docx")
 
 
 ## Rate
@@ -585,16 +585,15 @@ orilost_model_ft <- orilost_results$model_df |>
   set_header_labels(p_value = "p value",
                     CI_lower = "CI Lower",
                     CI_upper = "CI Upper") |>
-  compose(part = "body", j = 1, 
+  compose(part = "body", j = 1,
           value = as_paragraph(c("Intercept", "Period 2", "Generalist", "Period 2 : Generalist"))) |>
-  bold(i = ~ ((CI_lower * CI_upper) > 0)) |>
+  bg(part = "body", i = ~ ((CI_lower * CI_upper) > 0), bg = "lightgrey") |>
   hline(i = c(1, 3)) |>
   align(part = "all", j = 2:5, align = "center") |>
-  fontsize(part = "header", size = 12) |>
-  fontsize(part = "body", size = 11) |>
   autofit()
 orilost_model_ft
-orilost_model_ft |> save_as_image(path = "Results/Loss_original_species.png", res = 300)
+orilost_model_ft |> save_as_image(path = "Results/Loss_original_species.png", res = 600)
+orilost_model_ft |> save_as_docx(path = "Results/Loss_original_species.docx")
 
 orilost_results$emmeans_ft |> delete_columns(j = c(4, 5, 8))
 orilost_results$contrast_ft |> delete_columns(j = c(3, 4, 7))
@@ -700,7 +699,6 @@ winners_ft <- winners |>
                     new_1 = "# Summits new\n1972\u20132008/09",
                     new_2 = "# Summits new\n2008/09\u20132024/25",
                     persisted = "# Summits persisted\n1972\u20132024/25") |>
-  fontsize(part = "body", size = 14) |>
   italic(part = "body", j = 1) |>
   hline(i = 4) |>
   align(part = "all", j = 4:6, align = "center") |>
@@ -711,7 +709,8 @@ winners_ft <- winners |>
   hrule(part = "body", rule = "exact") |>
   line_spacing(part = "header", space = 2)
 winners_ft
-winners_ft |> save_as_image(path = "Results/Winners.png", res = 300)
+winners_ft |> save_as_image(path = "Results/Winners.png", res = 600)
+winners_ft |> save_as_docx(path = "Results/Winners.docx")
 
 
 disappeared_ft<- disappeared |>
@@ -1083,12 +1082,13 @@ rate_emmeans_ft <- rate_emmeans |>
   merge_v(j = "Period") |>
   hline(i = c(4, 8, 12)) |>
   hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
-  bold(i = ~ ((CI_lower * CI_upper) > 0), j = 3:7) |>
+  bg(part = "body", i = ~ ((CI_lower * CI_upper) > 0), j = 3:7, bg = "lightgrey") |>
   set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |>
   align(part = "all", j = 4:7, align = "center") |>
   autofit()
 rate_emmeans_ft
-rate_emmeans_ft |> save_as_image(path = "Results/Rates_emmeans_table.png", res = 300)
+rate_emmeans_ft |> save_as_image(path = "Results/Rates_emmeans_table.png", res = 600)
+rate_emmeans_ft |> save_as_docx(path = "Results/Rates_emmeans_table.docx")
 
 
 rate_contrasts <- richrate_results$contrast_df |>
@@ -1125,12 +1125,13 @@ rate_contrasts_ft <- rate_contrasts |>
   merge_v(j = "Contrast") |>
   hline(i = c(4, 8, 12)) |>
   hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
-  bold(i = ~ ((CI_lower * CI_upper) > 0), j = -1) |>
+  bg(part = "body", i = ~ ((CI_lower * CI_upper) > 0), j = -1, bg = "lightgrey") |>
   set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |>
   align(part = "all", j = -c(1:3), align = "center") |>
   autofit()
 rate_contrasts_ft
-rate_contrasts_ft |> save_as_image(path = "Results/Rates_contrasts_table.png", res = 300)
+rate_contrasts_ft |> save_as_image(path = "Results/Rates_contrasts_table.png", res = 600)
+rate_contrasts_ft |> save_as_docx(path = "Results/Rates_contrasts_table.docx")
 
 
 # Figure
@@ -1140,28 +1141,28 @@ richrate_figure <- richrate_results$emmeans_df |>
   scale_x_continuous(limits = c(-3.12, 5.2),
                      labels = NULL) +
   labs(x = NULL, y = adj_label["richness"]) +
-  theme(plot.margin = margin(0, 0, 10, 0))
+  theme(plot.margin = margin(b = 10))
 
 new_figure <- new_results$emmeans_df |>
   gg_results() +
   scale_x_continuous(limits = c(-3.12, 5.2),
                      labels = NULL) +
   labs(x = NULL, y = adj_label["new"]) +
-  theme(plot.margin = margin(0, 0, 10, 0))
+  theme(plot.margin = margin(b = 10))
 
 lost_figure <- lost_results$emmeans_df |>
   gg_results() +
   scale_x_continuous(limits = c(-3.12, 5.2)) +
   labs(x = "Rate (species&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["lost"]) +
-  theme(axis.title.x = element_markdown()) +
-  theme(plot.margin = margin(0, 0, 10, 0))
+  theme(axis.title.x = element_markdown(),
+        plot.margin = margin(b = 10))
 
 altrate_figure <- altrate_results$emmeans_df |>
   gg_results() +
   scale_x_continuous(limits = c(-0.78, 1.3)) +
   labs(x = "Rate (metres&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["altitude"]) +
   theme(axis.title.x = element_markdown(),
-        plot.margin = margin(10, 0, 0, 0))
+        plot.margin = margin(t = 10))
 
 rates_figure <- ggarrange(
   plotlist = list(richrate_figure, new_figure, lost_figure, altrate_figure),
@@ -1172,7 +1173,7 @@ rates_figure <- ggarrange(
   heights = c(1, 1, 1.35, 1.35)
 )
 rates_figure
-rates_figure |> ggsave(file = "Results/Rates_emmeans_figure.png", width = 20, height = 15, units = "cm", bg = "white")
+rates_figure |> ggsave(file = "Results/Rates_emmeans_figure.png", width = 16.5, height = 10, units = "cm", bg = "white", dpi = 600)
 
 
 
@@ -1214,11 +1215,10 @@ habitat_names_ft <- habitat_cover |>
   rename("NiN code" = habitat) |>
   relocate(Habitat) |>
   clean_ft() |>
-  fontsize(part = "header", size = 12) |>
-  fontsize(part = "body", size = 11) |>
   autofit()
 habitat_names_ft
-habitat_names_ft |> save_as_image(path = "Results/NiN_names.png", res = 300)
+habitat_names_ft |> save_as_image(path = "Results/NiN_names.png", res = 600)
+habitat_names_ft |> save_as_docx(path = "Results/NiN_names.docx")
 
 
 ## New species occurrences per habitat
@@ -1312,16 +1312,13 @@ hab_new_prop_ft <- hab_new_prop |>
           value = as_paragraph("# / 10,000 m", as_sup("2"))) |>
   merge_h(part = "header", i = 1) |>
   merge_v(part = "header", j = c(1, 8)) |>
-  bg(part = "header", bg = "black") |>
-  color(part = "header", color = "white") |>
-  bold(part = "header") |>
-  bg(part = "body", bg = "white") |>
+  bg(part = "all", bg = "white") |>
   color(part = "body", color = "black") |>
   align(part = "all", j = -1, align = "center") |>
   vline(j = c(1, 3, 5, 7)) |>
   flextable::font(part = "all", fontname = "Times New Roman") |>
-  fontsize(part = "header", size = 13) |>
-  fontsize(part = "body", size = 12) |>
+  fontsize(part = "header", size = 11) |>
+  fontsize(part = "body", size = 11) |>
   autofit()
 hab_new_prop_ft
 hab_new_prop_ft |> save_as_image(path = "Results/New_prop_habitats.png", res = 300)
@@ -1347,14 +1344,14 @@ hab_perc_gg <- hab_area |>
   mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
   ggplot() +
   geom_col(aes(x = habitat, y = percentage)) +
-  labs(title = "Estimated % area across all summits",
+  labs(title = "Estimated % area across\nall summits",
        x = NULL,
        y = NULL) +
   scale_x_discrete(labels = adj_label) +
   scale_y_continuous(limits = c(0, 38.05)) +
   theme_minimal() +
-  theme(text = element_text(size = 11, family = "serif"),
-        plot.title = element_text(size = 9, hjust = 0.5),
+  theme(text = element_text(size = 11, family = "sans"),
+        plot.title = element_text(size = 10, hjust = 0.5),
         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
         panel.grid.major.x = element_blank(),
         panel.grid.minor.y = element_blank())
@@ -1369,8 +1366,8 @@ hab_new_total_gg <- hab_new_prop_v |>
   scale_x_discrete(labels = adj_label) +
   scale_y_continuous(limits = c(0, 38.05)) +
   theme_minimal() +
-  theme(text = element_text(size = 11, family = "serif"),
-        plot.title = element_text(size = 9, hjust = 0.5),
+  theme(text = element_text(size = 11, family = "sans"),
+        plot.title = element_text(size = 10, hjust = 0.5),
         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
         panel.grid.major.x = element_blank(),
         panel.grid.minor.y = element_blank(),
@@ -1383,14 +1380,14 @@ hab_new_prop_gg <- hab_new_prop_v |>
   ggplot() +
   geom_col(aes(x = habitat, y = total_byha, fill = specialisation)) +
   scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-  labs(title = expression("# New species occurrences / 10 000 m"^2),
+  labs(title = paste0("# New species occurrences\n/ 10 000 m", "\u00B2"),
        x = NULL,
        y = NULL) +
   scale_x_discrete(labels = adj_label) +
   scale_y_continuous(limits = c(0, 19.025)) +
   theme_minimal() +
-  theme(text = element_text(size = 11, family = "serif"),
-        plot.title = element_text(size = 9, hjust = 0.5),
+  theme(text = element_text(size = 11, family = "sans"),
+        plot.title = element_text(size = 10, hjust = 0.5),
         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
         panel.grid.major.x = element_blank(),
         panel.grid.minor.y = element_blank())
@@ -1398,5 +1395,5 @@ hab_new_prop_gg <- hab_new_prop_v |>
 hab_perc_new_gg <- ggarrange(hab_perc_gg, hab_new_total_gg, hab_new_prop_gg,
                            ncol = 3, align = "h", common.legend = TRUE)
 hab_perc_new_gg
-hab_perc_new_gg |> ggsave(filename = "New_species_per_habitat_figure_area.png", path = "Results", dpi = 300, width = 16.5, height = 10, units = "cm", bg = "white")
+hab_perc_new_gg |> ggsave(filename = "New_species_per_habitat_figure_area.png", path = "Results", dpi = 600, width = 16.5, height = 10, units = "cm", bg = "white")
 
