@@ -198,7 +198,7 @@ gg_results <- function(data) {
            Specialisation = factor(Specialisation, levels = c("generalist", "alpine"))) |>
     ggplot(aes(x = Estimate, y = Period, colour = Specialisation)) +
     geom_vline(xintercept = 0, colour = "black") +
-    geom_point(size = 3, position = position_dodge(width = 0.6)) +
+    geom_point(size = 2, position = position_dodge(width = 0.6)) +
     geom_errorbar(aes(xmin = CI_lower, xmax = CI_upper), width = 0.4, position = position_dodge(width = 0.6)) +
     scale_y_discrete(labels = adj_label) +
     scale_colour_manual("", values = colour_mapping$specialisation, labels = adj_label) +
@@ -208,26 +208,23 @@ gg_results <- function(data) {
           plot.background = element_rect(fill = "white", colour = NA),
           panel.grid.major.y = element_blank(),
           panel.border = element_blank(),
-          text = element_text(size = 14, family = "serif"),
-          axis.title.x = element_text(hjust = 0.35, size = 12, margin = margin(t = 5)),
+          text = element_text(size = 10, family = "sans"),
+          axis.title.x = element_text(hjust = 0.35, size = 10, margin = margin(t = 5)),
           axis.text.x = element_text(margin = margin(t = 10)),
           axis.title.y = element_markdown(angle = 0, hjust = 0, vjust = 0.5, margin = margin(r = 30)),
           legend.position = "top",
-          legend.box.margin = margin(l = 80),
+          legend.text = element_text(size = 10),
+          legend.box.margin = margin(l = 70),
           legend.key.spacing.x = unit(1, "cm"))
 }
 
 clean_ft <- function(tab) {
   tab_ft <- tab |>
     flextable() |>
-    bg(part = "header", bg = "black") |>
-    color(part = "header", color = "white") |>
-    bold(part = "header") |>
-    bg(part = "body", bg = "white") |>
-    color(part = "body", color = "black") |>
+    bg(part = "all", bg = "white") |>
+    color(part = "all", color = "black") |>
     flextable::font(part = "all", fontname = "Times New Roman") |>
-    fontsize(part = "header", size = 13) |>
-    fontsize(part = "body", size = 12)
+    fontsize(part = "all", size = 11)
   tab_ft
 }
 
