@@ -230,8 +230,6 @@ list(
       rename("NiN code" = habitat) |>
       relocate(Habitat) |>
       clean_ft() |>
-      fontsize(part = "header", size = 12) |>
-      fontsize(part = "body", size = 11) |>
       autofit()
   ),
   # Clean files----
@@ -281,6 +279,29 @@ list(
       mutate(year = case_when(year == 1972 ~ "first",
                               year %in% c(2008, 2009) ~ "second",
                               year %in% c(2024, 2025) ~ "third"))
+  ),
+  tar_target(
+    name = summit_ft,
+    command = summit_data_tidy |>
+      left_join(filefjell_data_clean |>
+                  select(summit, year) |>
+                  distinct() |>
+                  mutate(survey = case_when(year == 1972 ~ "first",
+                                            year %in% c(2008, 2009) ~ "second",
+                                            year %in% c(2024, 2025) ~ "third")) |>
+                  pivot_wider(names_from = survey, values_from = year),
+                by = "summit") |>
+      mutate(across(c(correct_height, first:third), ~ as.character(.x))) |>
+      rename("Summit" = summit,
+             "Elevation" = correct_height,
+             "Area (ha)" = summit_hectare,
+             "Bedrock" = bedrock,
+             "First survey" = first,
+             "Second survey" = second,
+             "Third survey" = third) |>
+      clean_ft() |>
+      align(part = "body", j = c(2, 3, 5, 6, 7), align = "center") |>
+      autofit()
   ),
   # Status overview----
   tar_target(
@@ -435,7 +456,7 @@ list(
                    width = 0) +
       geom_text(data = species_records_manually,
                 aes(x = x, y = y, label = label),
-                family = "serif", size = 4) +
+                family = "sans", size = 3) +
       scale_fill_manual(values = alluvial_palette,
                         name   = "Between surveys") +
       scale_alpha_manual(values = c("light" = 0.6, "dark" = 0.9)) +
@@ -445,12 +466,12 @@ list(
                          expand = c(0.08, 0.05)) +
       labs(x = NULL,
            y = "Number of species records") +
-      theme_minimal(base_size = 12) +
+      theme_minimal() +
       theme(panel.grid.minor.x = element_blank(),
             panel.grid.major.x = element_blank(),
-            axis.title.y = element_markdown(margin = margin(r = 10)),
-            legend.position = "top",
-            text = element_text(size = 14, family = "serif"))
+            text = element_text(size = 10, family = "sans"),
+            axis.title.y = element_markdown(margin = margin(r = 6)),
+            legend.position = "top")
   ),
   # Richness----
   tar_target(
@@ -509,8 +530,6 @@ list(
       hline(i = c(2, 3), border = officer::fp_border(color = "grey")) |>
       merge_v(j = 1) |>
       align(j = 3:4, align = "center") |>
-      fontsize(part = "header", size = 12) |>
-      fontsize(part = "body", size = 11) |>
       autofit()
   ),
   tar_target(
@@ -649,11 +668,9 @@ list(
                         CI_upper = "CI Upper") |>
       compose(part = "body", j = 1, 
               value = as_paragraph(c("Intercept", "Period 2", "Generalist", "Period 2 : Generalist"))) |>
-      bold(i = ~ ((CI_lower * CI_upper) > 0)) |>
+      bg(part = "body", i = ~ ((CI_lower * CI_upper) > 0), bg = "lightgrey") |>
       hline(i = c(1, 3)) |>
       align(part = "all", j = 2:5, align = "center") |>
-      fontsize(part = "header", size = 12) |>
-      fontsize(part = "body", size = 11) |>
       autofit()
   ),
   # New and lost species----
@@ -715,7 +732,6 @@ list(
                         new_1 = "# Summits new\n1972\u20132008/09",
                         new_2 = "# Summits new\n2008/09\u20132024/25",
                         persisted = "# Summits persisted\n1972\u20132024/25") |>
-      fontsize(part = "body", size = 14) |>
       italic(part = "body", j = 1) |>
       hline(i = 4) |>
       align(part = "all", j = 4:6, align = "center") |>
@@ -776,13 +792,99 @@ list(
   ),
   # Rates results----
   tar_target(
+    name = rate_emmeans,
+    command = richness_results$emmeans_df |>
+      mutate(Model = "Species richness") |>
+      rbind(new_results$emmeans_df |>
+              mutate(Model = "New species")) |>
+      rbind(lost_results$emmeans_df |>
+              mutate(Model = "Lost species")) |>
+      rbind(altitude_results$emmeans_df |>
+              mutate(df = NA_real_,
+                     statistic = NA_real_,
+                     Model = "Uppermost occurrence") |>
+              relocate(df, .after = Estimate) |>
+              relocate(statistic, .after = CI_upper)) |>
+      relocate(Model) |>
+      mutate(Model = factor(Model, levels = c("Species richness", "New species", "Lost species", "Uppermost occurrence"))) |>
+      mutate(Model = recode(Model, "Species richness" = "Species\nrichness", "Uppermost occurrence" = "Uppermost\noccurrence"))
+  ),
+  tar_target(
+    name = rate_emmeans_ft,
+    command = rate_emmeans |>
+      select(!c(df, SE, statistic)) |>
+      arrange(Model, Period, Specialisation) |>
+      mutate(p_value1 = ifelse(p_value > 0.001, round(p_value, 3), NA) |> as.character(),
+             p_value2 = ifelse(p_value < 0.001, "< 0.001", NA) |> as.character(),
+             across(where(is.numeric), ~ round(., 2))) |>
+      select(!p_value) |>
+      mutate(p_value = coalesce(p_value1, p_value2)) |>
+      select(!c(p_value1, p_value2)) |>
+      mutate(Period = case_when(Period == "period1" ~ "1972–2008/09",
+                                Period == "period2" ~ "2008/09–2024/25"),
+             Specialisation = case_when(Specialisation == "alpine" ~ "Specialist",
+                                        Specialisation == "generalist" ~ "Generalist")) |>
+      clean_ft() |>
+      merge_v(j = "Model") |>
+      merge_v(j = "Period") |>
+      hline(i = c(4, 8, 12)) |>
+      hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
+      bg(part = "body", i = ~ ((CI_lower * CI_upper) > 0), j = 3:7, bg = "lightgrey") |>
+      set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |>
+      align(part = "all", j = 4:7, align = "center") |>
+      autofit()
+  ),
+  tar_target(
+    name = rate_contrasts,
+    command = richness_results$contrast_df |>
+      mutate(Model = "Species richness") |>
+      rbind(new_results$contrast_df |>
+              mutate(Model = "New species")) |>
+      rbind(lost_results$contrast_df |>
+              mutate(Model = "Lost species")) |>
+      rbind(altitude_results$contrast_df |>
+              mutate(df = NA_real_,
+                     statistic = NA_real_,
+                     Model = "Uppermost occurrence") |>
+              relocate(df, .after = Estimate) |>
+              relocate(statistic, .after = CI_upper)) |>
+      relocate(Model) |>
+      mutate(Model = factor(Model, levels = c("Species richness", "New species", "Lost species", "Uppermost occurrence"))) |>
+      mutate(Model = recode(Model, "Species richness" = "Species\nrichness", "Uppermost occurrence" = "Uppermost\noccurrence"))
+  ),
+  tar_target(
+    name = rate_contrasts_ft,
+    command = rate_contrasts |>
+      select(!c(df, SE, statistic)) |>
+      mutate(p_value1 = ifelse(p_value > 0.001, round(p_value, 3), NA) |> as.character(),
+             p_value2 = ifelse(p_value < 0.001, "< 0.001", NA) |> as.character(),
+             across(where(is.numeric), ~ round(., 2))) |>
+      select(!p_value) |>
+      mutate(p_value = coalesce(p_value1, p_value2)) |>
+      select(!c(p_value1, p_value2)) |>
+      mutate(Contrast = case_when(Contrast == "1A-2A" ~ "Period 1 – Period 2. Specialists",
+                                  Contrast == "1G-2G" ~ "Period 1 – Period 2. Generalists",
+                                  Contrast == "1A-1G" ~ "Specialists – Generalists. Period 1",
+                                  Contrast == "2A-2G" ~ "Specialists – Generalists. Period 2")) |>
+      separate_wider_delim(cols = Contrast, delim = ".", names = c("Contrast", "Group")) |>
+      clean_ft() |>
+      merge_v(j = "Model") |>
+      merge_v(j = "Contrast") |>
+      hline(i = c(4, 8, 12)) |>
+      hline(i = c(2, 6, 10, 14), border = officer::fp_border(style = "dotted")) |>
+      bg(part = "body", i = ~ ((CI_lower * CI_upper) > 0), j = -1, bg = "lightgrey") |>
+      set_header_labels(CI_lower = "CI Lower", CI_upper = "CI Upper", p_value = "p value") |>
+      align(part = "all", j = -c(1:3), align = "center") |>
+      autofit()
+  ),
+  tar_target(
     name = richness_figure,
     command = richness_results$emmeans_df |>
     gg_results() +
     scale_x_continuous(limits = c(-3.12, 5.2),
                        labels = NULL) +
     labs(x = NULL, y = adj_label["richness"]) +
-    theme(plot.margin = margin(0, 0, 10, 0))
+    theme(plot.margin = margin(b = 10))
   ),
   tar_target(
     name = new_figure,
@@ -791,7 +893,7 @@ list(
     scale_x_continuous(limits = c(-3.12, 5.2),
                        labels = NULL) +
     labs(x = NULL, y = adj_label["new"]) +
-    theme(plot.margin = margin(0, 0, 10, 0))
+    theme(plot.margin = margin(b = 10))
   ),
   tar_target(
     name = lost_figure,
@@ -799,8 +901,8 @@ list(
     gg_results() +
     scale_x_continuous(limits = c(-3.12, 5.2)) +
     labs(x = "Rate (species&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["lost"]) +
-    theme(axis.title.x = element_markdown()) +
-    theme(plot.margin = margin(0, 0, 10, 0))
+    theme(axis.title.x = element_markdown(),
+          plot.margin = margin(b = 10))
   ),
   tar_target(
     name = altitude_figure,
@@ -809,7 +911,7 @@ list(
     scale_x_continuous(limits = c(-0.78, 1.3)) +
     labs(x = "Rate (metres&nbsp;summit<sup>-1</sup>&nbsp;decade<sup>-1</sup>)", y = adj_label["altitude"]) +
     theme(axis.title.x = element_markdown(),
-          plot.margin = margin(10, 0, 0, 0))
+          plot.margin = margin(t = 10))
   ),
   tar_target(
     name = rates_figure,
@@ -953,14 +1055,14 @@ list(
       mutate(habitat = factor(habitat, levels = c("T1", "T27", "T13", "T14", "T7", "V6", "T3", "T22"))) |>
       ggplot() +
       geom_col(aes(x = habitat, y = percentage)) +
-      labs(title = "Estimated % area across all summits",
+      labs(title = "Estimated % area across\nall summits",
            x = NULL,
            y = NULL) +
       scale_x_discrete(labels = adj_label) +
       scale_y_continuous(limits = c(0, 38.05)) +
       theme_minimal() +
-      theme(text = element_text(size = 11, family = "serif"),
-            plot.title = element_text(size = 9, hjust = 0.5),
+      theme(text = element_text(size = 11, family = "sans"),
+            plot.title = element_text(size = 10, hjust = 0.5),
             axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
             panel.grid.major.x = element_blank(),
             panel.grid.minor.y = element_blank())
@@ -977,8 +1079,8 @@ list(
       scale_x_discrete(labels = adj_label) +
       scale_y_continuous(limits = c(0, 38.05)) +
       theme_minimal() +
-      theme(text = element_text(size = 11, family = "serif"),
-            plot.title = element_text(size = 9, hjust = 0.5),
+      theme(text = element_text(size = 11, family = "sans"),
+            plot.title = element_text(size = 10, hjust = 0.5),
             axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
             panel.grid.major.x = element_blank(),
             panel.grid.minor.y = element_blank(),
@@ -993,14 +1095,14 @@ list(
       ggplot() +
       geom_col(aes(x = habitat, y = total_byha, fill = specialisation)) +
       scale_fill_manual("Specialisation", values = colour_mapping$specialisation, labels = adj_label) +
-      labs(title = expression("# New species occurrences / 10 000 m"^2),
+      labs(title = paste0("# New species occurrences\n/ 10 000 m", "\u00B2"),
            x = NULL,
            y = NULL) +
       scale_x_discrete(labels = adj_label) +
       scale_y_continuous(limits = c(0, 19.025)) +
       theme_minimal() +
-      theme(text = element_text(size = 11, family = "serif"),
-            plot.title = element_text(size = 9, hjust = 0.5),
+      theme(text = element_text(size = 11, family = "sans"),
+            plot.title = element_text(size = 10, hjust = 0.5),
             axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.2),
             panel.grid.major.x = element_blank(),
             panel.grid.minor.y = element_blank())
